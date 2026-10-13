@@ -27,6 +27,7 @@ setup(
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
+            'navigation_ready = turtlebot_simu.navigation_ready:main',
             'save_map = turtlebot_simu.save_map:main',
             'topic_check = turtlebot_simu.topic_check:main',
             'waypoint_nav = turtlebot_simu.waypoint_nav:main',
