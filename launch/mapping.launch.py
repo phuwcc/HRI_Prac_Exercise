@@ -13,27 +13,29 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from turtlebot_simu.launch_support import world_launch_arguments
 
 
 def generate_launch_description() -> LaunchDescription:
     simulator_share = get_package_share_directory('turtlebot4_ignition_bringup')
     navigation_share = get_package_share_directory('turtlebot4_navigation')
     viz_share = get_package_share_directory('turtlebot4_viz')
+    package_share = get_package_share_directory('turtlebot_simu')
 
     arguments = [
         DeclareLaunchArgument('model', default_value='standard', choices=['standard', 'lite']),
-        DeclareLaunchArgument('world', default_value='maze'),
+        DeclareLaunchArgument('world', default_value='small_room'),
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument('x', default_value='0.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
         DeclareLaunchArgument('z', default_value='0.0'),
         DeclareLaunchArgument('yaw', default_value='0.0'),
-        DeclareLaunchArgument('sync', default_value='true', choices=['true', 'false']),
+        DeclareLaunchArgument('sync', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument(
             'check_topics', default_value='true', choices=['true', 'false'],
         ),
-    ]
+    ] + world_launch_arguments()
 
     simulator = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -44,6 +46,7 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={
             'model': LaunchConfiguration('model'),
             'world': LaunchConfiguration('world'),
+            'gz_args': LaunchConfiguration('gz_args'),
             'rviz': 'false',
             # Stop SLAM and the remaining nodes when Gazebo is closed.
             'on_exit_shutdown': 'true',
@@ -63,7 +66,7 @@ def generate_launch_description() -> LaunchDescription:
             'use_sim_time': 'true',
             'sync': LaunchConfiguration('sync'),
             'namespace': LaunchConfiguration('namespace'),
-            'params': PathJoinSubstitution([navigation_share, 'config', 'slam.yaml']),
+            'params': PathJoinSubstitution([package_share, 'config', 'slam.yaml']),
         }.items(),
     )
 

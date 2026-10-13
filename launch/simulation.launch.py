@@ -12,6 +12,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from turtlebot_simu.launch_support import world_launch_arguments
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -22,7 +23,7 @@ def generate_launch_description() -> LaunchDescription:
 
     arguments = [
         DeclareLaunchArgument('model', default_value='standard', choices=['standard', 'lite']),
-        DeclareLaunchArgument('world', default_value='maze'),
+        DeclareLaunchArgument('world', default_value='small_room'),
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument('x', default_value='0.0'),
@@ -33,13 +34,14 @@ def generate_launch_description() -> LaunchDescription:
             'check_topics', default_value='false', choices=['true', 'false'],
             description='Run the one-shot /scan, /odom and /cmd_vel health check.',
         ),
-    ]
+    ] + world_launch_arguments()
 
     simulator = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(simulator_launch),
         launch_arguments={
             'model': LaunchConfiguration('model'),
             'world': LaunchConfiguration('world'),
+            'gz_args': LaunchConfiguration('gz_args'),
             'rviz': LaunchConfiguration('rviz'),
             # Stop the complete ROS launch when the Gazebo window is closed.
             'on_exit_shutdown': 'true',

@@ -1,5 +1,8 @@
 from pathlib import Path
 import importlib.util
+import math
+import shlex
+import xml.etree.ElementTree as ET
 
 import pytest
 import yaml
@@ -11,9 +14,85 @@ from turtlebot_simu.save_map import map_prefix
 from nav_msgs.msg import OccupancyGrid
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from turtlebot_simu.waypoint_nav import load_goals, validate_goal_cells, verify_goal_reached
+from turtlebot_simu import launch_support
 
 
 ROOT = Path(__file__).parents[1]
+
+
+def test_small_room_world_is_local_and_six_meters_wide():
+    world = ET.parse(ROOT / 'worlds' / 'small_room.sdf').getroot().find('world')
+    assert world.attrib['name'] == 'small_room'
+    assert not world.findall('.//include')
+    walls = world.find("model[@name='walls']")
+    west = walls.find("link[@name='west']")
+    east = walls.find("link[@name='east']")
+    west_x = float(west.findtext('pose').split()[0])
+    east_x = float(east.findtext('pose').split()[0])
+    thickness = float(west.findtext('collision/geometry/box/size').split()[0])
+    assert east_x - west_x - thickness == pytest.approx(6.0)
+
+
+@pytest.mark.parametrize('goal', load_goals(ROOT / 'config' / 'waypoints_small_room.yaml'))
+def test_small_room_example_goals_clear_geometry(goal):
+    world = ET.parse(ROOT / 'worlds' / 'small_room.sdf').getroot().find('world')
+    assert -3 < goal['x'] < 3 and -3 < goal['y'] < 3
+    for model in world.findall('model'):
+        pose = [float(v) for v in model.findtext('pose', '0 0 0 0 0 0').split()]
+        for link in model.findall('link'):
+            offset = [float(v) for v in link.findtext('pose', '0 0 0 0 0 0').split()]
+            dx, dy = goal['x'] - pose[0] - offset[0], goal['y'] - pose[1] - offset[1]
+            for geometry in link.findall('collision/geometry'):
+                box = geometry.find('box')
+                cylinder = geometry.find('cylinder')
+                if box is not None:
+                    width, height, _ = map(float, box.findtext('size').split())
+                    distance = math.hypot(max(abs(dx) - width / 2, 0),
+                                          max(abs(dy) - height / 2, 0))
+                    assert distance >= 0.35
+                elif cylinder is not None:
+                    assert math.hypot(dx, dy) - float(cylinder.findtext('radius')) >= 0.35
+
+
+@pytest.mark.parametrize('headless', ['false', 'true'])
+def test_small_room_launch_uses_absolute_sdf_and_logical_world(monkeypatch, headless):
+    original = launch_support.get_package_share_directory
+    monkeypatch.setattr(launch_support, 'get_package_share_directory',
+                        lambda name: str(ROOT) if name == 'turtlebot_simu' else original(name))
+    context = LaunchContext()
+    context.launch_configurations.update(
+        world='small_room', model='lite', headless=headless, gz_args='',
+    )
+    for action in launch_support.configure_gazebo(context):
+        action.execute(context)
+    arguments = shlex.split(context.launch_configurations['gz_args'])
+    assert arguments[0] == str(ROOT / 'worlds' / 'small_room.sdf')
+    assert ('-s' in arguments) == (headless == 'true')
+    assert ('--gui-config' in arguments) == (headless == 'false')
+    assert context.launch_configurations['world'] == 'small_room'
+
+
+def test_builtin_world_keeps_upstream_launch():
+    context = LaunchContext()
+    context.launch_configurations.update(world='maze', headless='false', gz_args='')
+    assert launch_support.configure_gazebo(context) == []
+
+
+def test_explicit_gazebo_arguments_are_preserved():
+    context = LaunchContext()
+    context.launch_configurations['gz_args'] = '/tmp/custom.sdf -r -s'
+    assert launch_support.configure_gazebo(context) == []
+
+
+@pytest.mark.parametrize('name', ['simulation', 'mapping', 'navigation'])
+def test_launch_defaults_to_small_room(name):
+    actions = load_launch(name).generate_launch_description().entities
+    context = LaunchContext()
+    for action in actions:
+        if isinstance(action, DeclareLaunchArgument):
+            action.execute(context)
+    assert context.launch_configurations['world'] == 'small_room'
+    assert context.launch_configurations['headless'] == 'false'
 
 
 def test_map_yaml_references_existing_image():
