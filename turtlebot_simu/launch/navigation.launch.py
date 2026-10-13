@@ -17,6 +17,7 @@ from launch.actions import (
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from turtlebot_simu.launch_support import world_launch_arguments
 
 
 def validate_map(context):
@@ -64,7 +65,7 @@ def generate_launch_description() -> LaunchDescription:
 
     arguments = [
         DeclareLaunchArgument('model', default_value='standard', choices=['standard', 'lite']),
-        DeclareLaunchArgument('world', default_value='maze'),
+        DeclareLaunchArgument('world', default_value='small_room'),
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument('x', default_value='0.0'),
         DeclareLaunchArgument('y', default_value='0.0'),
@@ -73,10 +74,10 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument('rviz', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument(
             'map',
-            default_value=PathJoinSubstitution([package_share, 'maps', 'map.yaml']),
+            default_value=PathJoinSubstitution([package_share, 'maps', 'small_room.yaml']),
             description='Absolute path to the map YAML produced during mapping.',
         ),
-    ]
+    ] + world_launch_arguments()
 
     simulator = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -87,6 +88,7 @@ def generate_launch_description() -> LaunchDescription:
         launch_arguments={
             'model': LaunchConfiguration('model'),
             'world': LaunchConfiguration('world'),
+            'gz_args': LaunchConfiguration('gz_args'),
             'rviz': 'false',
             # Stop Nav2 and the remaining nodes when Gazebo is closed.
             'on_exit_shutdown': 'true',

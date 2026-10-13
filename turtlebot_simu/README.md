@@ -1,17 +1,31 @@
-# TurtleBot 4 Simulation, SLAM và Nav2
+# TurtleBot 4: SLAM và Navigation
 
-Package ROS 2 Humble mô phỏng TurtleBot 4 trong Gazebo, xây dựng bản đồ bằng
-SLAM Toolbox, localization bằng AMCL và autonomous navigation bằng Nav2.
+Hướng dẫn có hai phần độc lập:
 
-```text
-Gazebo → /scan + /odom → SLAM Toolbox → map.yaml + map.pgm
-                                      ↓
-Nav2 Goal → planner → controller → /cmd_vel → TurtleBot 4
-```
+| Phần | Mục đích | Lệnh khởi động |
+|---|---|---|
+| 1. SLAM | Điều khiển robot để quét và lưu bản đồ | `mapping.launch.py` |
+| 2. Navigation | Load bản đồ đã lưu và điều hướng bằng Nav2 | `navigation.launch.py` |
 
-## Cài dependency
+Mỗi launch tự mở Gazebo và RViz. Chỉ chạy một phần tại một thời điểm.
+Không cần chạy `simulation.launch.py` trước: launch đó chỉ mô phỏng robot,
+không tạo bản đồ.
 
-Yêu cầu Ubuntu 22.04 và ROS 2 Humble Desktop.
+## Chuẩn bị — chỉ làm lần đầu
+
+Yêu cầu Ubuntu 22.04 và ROS 2 Humble Desktop. Các lệnh bên dưới dùng Bash,
+workspace tại `~/ur_robot_drawing` và world `small_room`.
+
+World mặc định mới là phòng **6 × 6 m**, có bốn tường bao, một vách ngăn,
+một khối hộp và một trụ. World nằm trong `worlds/small_room.sdf`, không cần tải
+model môi trường từ Fuel. Đi vòng qua đầu phía nam của vách ngăn để khảo sát
+cả hai phía phòng. Có thể quay lại môi trường cũ bằng `world:=maze`.
+
+Phải quét SLAM lại khi đổi world; **không dùng map của `maze` cho `small_room`**.
+Các lệnh dưới lưu map mới với tên `small_room`, không ghi đè `maps/map.*` cũ.
+World nhỏ hơn giúp giảm phạm vi khảo sát, không bảo đảm sửa được lỗi Nav2/TF.
+
+Cài dependency:
 
 ```bash
 sudo apt update
@@ -27,102 +41,115 @@ sudo apt install \
   ros-humble-teleop-twist-keyboard
 ```
 
-## Build
+Build package:
 
 ```bash
 cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
-
 rosdep install --ignore-src --from-paths turtlebot_simu -r -y
 colcon build --packages-select turtlebot_simu --symlink-install
-source install/setup.bash
 ```
 
-Mỗi terminal mới đều phải source ROS 2 và workspace:
+Các khối lệnh chạy bên dưới đã bao gồm source ROS, source workspace và
+`ROS_LOCALHOST_ONLY=1`. Copy toàn bộ khối vào đúng terminal.
 
-```bash
-source /opt/ros/humble/setup.bash
-source ~/ur_robot_drawing/install/setup.bash
-export ROS_LOCALHOST_ONLY=1
-```
+## Phần 1 — SLAM: quét và lưu bản đồ
 
-Các launch file cũng tự đặt `ROS_LOCALHOST_ONLY=1`. Cần đặt cùng giá trị trong
-mọi terminal chạy teleop, lưu map, waypoint hoặc lệnh kiểm tra topic để các node
-nhìn thấy nhau.
+### Terminal 1: mở Gazebo, SLAM Toolbox và RViz
 
-## 1. Kiểm tra simulation
-
-Terminal 1 — Gazebo, TurtleBot 4 và RViz:
+Dừng mọi launch simulation/navigation cũ trước khi chạy:
 
 ```bash
 cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-
-ros2 launch turtlebot_simu simulation.launch.py check_topics:=true
-```
-
-Nếu Gazebo đang pause, bấm **Play**. Khi simulation hoạt động đúng, terminal sẽ
-in `PASS` cho `/scan`, `/odom` và `/cmd_vel`.
-
-`PASS` xác nhận có dữ liệu sensor và subscriber tương thích của `/cmd_vel`.
-Cần dùng teleop và quan sát robot/odometry để xác nhận chuyển động thực tế.
-Node kiểm tra không publish lệnh vận tốc, nên có thể chạy khi robot đang di chuyển.
-
-Terminal 2 — điều khiển robot:
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/ur_robot_drawing/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 
-ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
+ros2 launch turtlebot_simu mapping.launch.py world:=small_room
 ```
 
-Khi kết thúc, bấm `Ctrl+C` **một lần** ở terminal teleop, sau đó bấm `Ctrl+C`
-**một lần** ở terminal launch và chờ các node dừng. Có thể đóng cửa sổ Gazebo;
-package sẽ tự shutdown phần launch còn lại. Không nhấn `Ctrl+C` liên tục.
+Giữ terminal này chạy trong suốt quá trình quét và lưu map.
 
-Kiểm tra topic thủ công khi cần:
+Mapping mặc định dùng SLAM bất đồng bộ (`sync:=false`) và cấu hình nhẹ trong
+`config/slam.yaml`: xử lý mỗi 3 scan, khoảng cách thời gian tối thiểu 0.5 giây,
+cập nhật map mỗi 2 giây và giảm xử lý khi robot gần như đứng yên.
+Map vẫn có độ phân giải 5 cm và bật loop closure. Map trên RViz cập nhật thưa
+hơn; đi chậm khoảng 0.2 m/s như lệnh teleop bên dưới.
+
+Nếu vừa cập nhật repo, build lại trước khi chạy để nhận cấu hình mới:
 
 ```bash
-ros2 topic hz /scan
-ros2 topic hz /odom
-ros2 topic info /cmd_vel -v
-ros2 run turtlebot_simu topic_check --timeout 30
+cd ~/ur_robot_drawing
+source /opt/ros/humble/setup.bash
+colcon build --packages-select turtlebot_simu --symlink-install
 ```
 
-## 2. Xây dựng bản đồ
+Để giảm tải hiển thị, đặt **Global Options → Frame Rate = 10** trong RViz.
+Nếu vẫn nặng, có thể tắt RViz và quan sát robot trong Gazebo:
 
-Dừng simulation cũ bằng `Ctrl+C`.
+```bash
+ros2 launch turtlebot_simu mapping.launch.py world:=small_room rviz:=false
+```
 
-Terminal 1 — Gazebo, SLAM Toolbox và RViz:
+SLAM và lưu map vẫn hoạt động khi tắt RViz. Giảm tải không thay thế việc kiểm
+tra TF nếu cảnh báo `queue is full` tiếp tục lặp lại.
+
+Nếu chỉ cần Gazebo server và xem map trên RViz, không mở giao diện Gazebo:
+
+```bash
+ros2 launch turtlebot_simu mapping.launch.py world:=small_room headless:=true
+```
+
+Để kiểm tra simulation riêng:
+
+```bash
+ros2 launch turtlebot_simu simulation.launch.py world:=small_room check_topics:=true
+```
+
+Trong Gazebo, bấm **Play** nếu simulation đang pause. Trong RViz kiểm tra:
+
+- **Global Options → Fixed Frame:** `map`.
+- **Map:** được bật, Topic là `/map`.
+- **LaserScan:** được bật, Topic là `/scan`.
+
+Map sẽ xuất hiện khi SLAM nhận được LaserScan và TF hợp lệ. Nếu chưa thấy map,
+xem mục kiểm tra phía dưới trước khi chạy lệnh lưu.
+
+### Terminal 2: undock và điều khiển robot
 
 ```bash
 cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-
-ros2 launch turtlebot_simu mapping.launch.py world:=maze
-```
-
-Terminal 2 — teleoperation:
-
-```bash
-source /opt/ros/humble/setup.bash
-source ~/ur_robot_drawing/install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 
 ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
 ```
 
-Điều khiển robot đi chậm quanh phần lớn khu vực. Nên quay lại các vị trí đã đi
-qua để SLAM thực hiện loop closure. Trên RViz cần thấy robot, LaserScan và map;
-LaserScan phải khớp với tường, không có tường đôi hoặc vùng lệch rõ rệt.
+Chờ kết quả `SUCCEEDED`, sau đó chạy trong cùng terminal:
 
-Terminal 3 — lưu bản đồ trong khi mapping vẫn đang chạy:
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+  --ros-args -p speed:=0.2 -p turn:=0.5
+```
+
+Nhấp vào terminal teleop để nhận phím:
+
+| Phím | Thao tác |
+|---|---|
+| `i` | Đi tới |
+| `,` | Đi lùi |
+| `j` / `l` | Quay trái / phải |
+| `k` | Dừng |
+| `z` / `q` | Giảm / tăng tốc độ |
+
+Đi chậm qua các hành lang và phần lớn khu vực trống. Quay lại một số vị trí
+đã đi qua để SLAM khép vòng. Trên RViz, map phải mở rộng theo đường đi,
+LaserScan khớp với tường, không có tường đôi hoặc vùng lệch rõ rệt.
+
+### Terminal 3: lưu map khi SLAM vẫn đang chạy
+
+Dừng robot bằng phím `k` ở Terminal 2. Giữ Terminal 1 chạy, mở Terminal 3:
 
 ```bash
 cd ~/ur_robot_drawing
@@ -131,80 +158,121 @@ source install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 
 ros2 run turtlebot_simu save_map \
-  --output "$PWD/turtlebot_simu/maps/map"
+  --output "$PWD/turtlebot_simu/maps/small_room" \
+  --timeout 30
 ```
 
-Kiểm tra kết quả:
+Lệnh này tạo map của phòng nhỏ (ghi đè nếu đã lưu cùng tên trước đó).
+Chỉ coi là lưu thành công khi có:
+
+```text
+Map saved successfully: .../small_room.yaml and .../small_room.pgm
+```
+
+Kiểm tra trong cùng terminal:
 
 ```bash
-ls -lh turtlebot_simu/maps/map.yaml turtlebot_simu/maps/map.pgm
+ls -lh turtlebot_simu/maps/small_room.yaml turtlebot_simu/maps/small_room.pgm
+file turtlebot_simu/maps/small_room.pgm
+head turtlebot_simu/maps/small_room.yaml
 ```
 
-Hai file trong `maps/` ban đầu chỉ là map mẫu. Phải chạy bước trên để thay bằng
-map thật trước khi thực hiện localization và navigation.
-Navigation sẽ báo lỗi trước khi mở Gazebo nếu vẫn dùng map mẫu hoặc thiếu ảnh map.
+Map ban đầu của repository là map mẫu 40 × 40. Map mới phải phù hợp với vùng
+đã quét trên RViz và không còn dòng `STARTER MAP ONLY` trong YAML.
+Kích thước ảnh riêng lẻ không đủ để kết luận chất lượng bản đồ.
 
-Sau khi lưu map, dừng mapping và build lại:
+### Kết thúc SLAM
+
+Sau khi lưu thành công:
+
+1. Nhấn `Ctrl+C` một lần ở Terminal 2 để dừng teleop.
+2. Nhấn `Ctrl+C` một lần ở Terminal 1 để dừng SLAM và Gazebo.
+3. Chờ các node dừng hoàn toàn trước khi mở Navigation.
+
+### Nếu map không xuất hiện hoặc lưu map bị timeout
+
+Trong Terminal 3 đã source ROS và workspace, chạy:
+
+```bash
+ros2 node list
+ros2 topic info /map
+```
+
+Phải có node `/slam_toolbox` và `/map` có ít nhất một publisher.
+Ba dòng `PASS` cho `/scan`, `/odom`, `/cmd_vel` chỉ kiểm tra sensor/kết nối,
+không chứng minh SLAM đã tạo map.
+
+Nếu không có `/slam_toolbox` hoặc `Publisher count: 0`, kiểm tra Terminal 1
+đang chạy **mapping.launch.py** và không có lỗi khởi động SLAM.
+Nếu có publisher nhưng RViz vẫn trống, kiểm tra **Map → Status**,
+Topic `/map`, Fixed Frame `map`, và trạng thái Play của Gazebo.
+
+Các dòng `oakd/start_camera`, `oakd/stop_camera`, `start_motor`,
+`stop_motor unavailable` có thể bỏ qua trong simulation nếu robot,
+`/scan` và `/odom` vẫn hoạt động. Đây là service điều khiển camera và LiDAR.
+
+## Phần 2 — Navigation: dùng bản đồ đã lưu
+
+Chỉ bắt đầu khi Phần 1 đã lưu thành công `small_room.yaml` và `small_room.pgm`,
+và launch SLAM đã dừng. Navigation không tiếp tục quét bản đồ;
+nó dùng map đã lưu để định vị và lập đường.
+
+### Terminal 1: mở Gazebo, map đã lưu, AMCL và Nav2
+
+Khối lệnh dưới build lại package để cập nhật map/config, rồi load trực tiếp
+map trong thư mục source bằng đường dẫn tuyệt đối:
 
 ```bash
 cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 colcon build --packages-select turtlebot_simu --symlink-install
 source install/setup.bash
+export ROS_LOCALHOST_ONLY=1
+
+ros2 launch turtlebot_simu navigation.launch.py \
+  world:=small_room \
+  map:="$PWD/turtlebot_simu/maps/small_room.yaml"
 ```
 
-## 3. Localization và Nav2
+Dùng đúng world đã quét ở Phần 1. Launch sẽ từ chối map mẫu hoặc thiếu file ảnh.
+Navigation mặc định tìm `maps/small_room.yaml`; phải lưu map thật trước.
+Nếu dùng lại `world:=maze`, truyền `map:=...` trỏ tới map đã quét của maze.
+Giữ terminal này chạy trong suốt quá trình navigation.
 
-Terminal 1 — mở lại đúng world, load map, chạy AMCL và Nav2:
+Trong Gazebo, bấm **Play** nếu cần. Trong RViz giữ **Fixed Frame = `map`**
+và bật **Map**, Topic `/map`.
+
+### Terminal 2: undock
 
 ```bash
 cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
+export ROS_LOCALHOST_ONLY=1
 
-ros2 launch turtlebot_simu navigation.launch.py world:=maze
+ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
 ```
 
-Trong RViz:
+Chờ kết quả `SUCCEEDED`.
+
+### Trên RViz: định vị và gửi goal
 
 1. Chọn **2D Pose Estimate**.
-2. Chọn đúng vị trí và hướng hiện tại của robot trong Gazebo.
-3. Chờ particle cloud hội tụ và LaserScan trùng với tường.
-4. Chọn **Nav2 Goal** và đặt goal trong vùng trống của map.
+2. Nhấp vào vị trí hiện tại của robot trên bản đồ và kéo mũi tên đúng hướng.
+3. Chờ particle cloud hội tụ, kiểm tra LaserScan trùng với tường.
+4. Chọn **Nav2 Goal**, nhấp vào vùng trắng và kéo mũi tên theo hướng muốn tới.
+5. Chờ robot đến đích rồi đặt goal tiếp theo ở vị trí khác.
 
-Robot được spawn trên dock. Trước goal đầu tiên, chạy lệnh undock ở terminal
-đã source và đặt `ROS_LOCALHOST_ONLY=1`, chờ trạng thái `SUCCEEDED`:
+Thực hiện ít nhất 3 goal ở các khu vực khác nhau. Goal phải cách tường đủ xa.
+Không chạy teleop trong khi Nav2 đang điều khiển robot.
 
-```bash
-ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
-```
+### Tùy chọn: chạy 3 goal tự động
 
-Sau khi đặt goal, không dùng teleop. Robot phải tự lập đường, tránh vật cản và
-đi tới goal.
+Sửa `turtlebot_simu/config/waypoints_small_room.yaml` thành ít nhất 3 vị trí an toàn
+trên map của bạn. Các tọa độ có sẵn chỉ là ví dụ; `x`, `y` tính bằng mét,
+`yaw` bằng radian trong frame `map`.
 
-`config/nav2.yaml` kế thừa cấu hình TurtleBot 4 Humble. Global costmap dùng bản
-đồ tĩnh; local costmap dùng LiDAR và inflation để tránh vật cản, không dùng
-static layer trong cửa sổ rolling và dùng frame `map` để kiểm tra TF localization
-trước khi active. Controller Regulated Pure Pursuit chạy 10 Hz, vận tốc tối đa
-0,2 m/s; planner chỉ lập đường trong vùng đã biết.
-
-Dùng map ở vị trí khác:
-
-```bash
-ros2 launch turtlebot_simu navigation.launch.py \
-  world:=maze \
-  map:=/duong/dan/tuyet/doi/map.yaml
-```
-
-## 4. Chạy ba navigation goal
-
-Cách đơn giản nhất để quay video là đặt lần lượt ba goal bằng **Nav2 Goal** trên
-RViz. Các goal phải nằm ở ba khu vực khác nhau.
-
-Package cũng có node chạy tự động ba goal. Sửa tọa độ an toàn trong
-`config/waypoints.yaml`, build lại, đặt initial pose trên RViz rồi chạy:
-
-Terminal 2:
+Sau khi undock và đặt **2D Pose Estimate**, chạy ở Terminal 2:
 
 ```bash
 cd ~/ur_robot_drawing
@@ -212,158 +280,75 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 export ROS_LOCALHOST_ONLY=1
 
-ros2 run turtlebot_simu waypoint_nav
+ros2 run turtlebot_simu waypoint_nav \
+  --goals-file "$PWD/turtlebot_simu/config/waypoints_small_room.yaml" \
+  --ready-timeout 120 \
+  --goal-timeout 180
 ```
 
-Node dùng simulation time, chờ pose AMCL đã đặt trên RViz và các node Nav2 active;
-không tự ghi đè initial pose. Có thể chỉnh thời gian chờ:
+Node chờ AMCL/Nav2 sẵn sàng, kiểm tra goal có nằm trong vùng trống và cách
+vật cản ít nhất `0.25 m`, rồi gửi lần lượt các goal. Sau mỗi kết quả thành công,
+node kiểm tra pose AMCL để xác nhận robot đã đến đích.
 
-```bash
-ros2 run turtlebot_simu waypoint_nav --ready-timeout 120 --goal-timeout 180
-```
+File mẫu của phòng nhỏ dùng ba điểm `(-2, -2)`, `(2, 1.5)`, `(-2, 2.3)`.
+Đây là tọa độ tham khảo trong world, không phải kết quả navigation đã kiểm chứng;
+đối chiếu với frame `map` sau SLAM và sửa nếu cần. Node `waypoint_nav` chạy
+không có `--goals-file` vẫn dùng file mẫu cũ `config/waypoints.yaml`.
 
-Trước khi gửi goal, node đối chiếu toàn bộ tọa độ với `/map`, từ chối điểm nằm
-ngoài map, trong vùng chưa biết hoặc cách vật cản dưới `--clearance` (mặc định
-0,25 m). Kiểm tra này không thay thế lập kế hoạch và tránh vật cản của Nav2.
-Sau kết quả `SUCCEEDED`, node còn đối chiếu pose AMCL với vị trí/hướng goal;
-nếu robot chưa đến đích, node báo lỗi thay vì ghi nhận thành công.
+### Nếu Nav2 không nhận goal
 
-Nếu robot đang dock và không nhận teleop, undock rồi mới di chuyển:
-
-```bash
-ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
-```
-
-Với namespace (ví dụ `namespace:=robot`), topic trở thành `/robot/scan`,
-`/robot/odom`, `/robot/cmd_vel`. Các lệnh ở terminal riêng cần cùng namespace:
-
-```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r __ns:=/robot
-ros2 run turtlebot_simu topic_check --ros-args -r __ns:=/robot
-ros2 run turtlebot_simu save_map --output "$PWD/turtlebot_simu/maps/map" --map-topic /robot/map
-ros2 run turtlebot_simu waypoint_nav --ros-args -r __ns:=/robot
-```
-
-Ví dụ cấu hình:
-
-```yaml
-goals:
-  - {x: 2.0, y: 0.0, yaw: 0.0}
-  - {x: 2.0, y: -1.0, yaw: 0.0}
-  - {x: -2.0, y: 0.0, yaw: 0.0}
-```
-
-Đây chỉ là tọa độ mẫu. Chỉ sử dụng goal nằm trong vùng trắng của map và cách
-tường, vật cản đủ xa.
-
-## Launch arguments
-
-Các launch file dùng chung những tham số sau:
-
-| Tham số | Mặc định | Nội dung |
-|---|---:|---|
-| `world` | `maze` | World Gazebo |
-| `model` | `standard` | `standard` hoặc `lite` |
-| `rviz` | `true` | Bật/tắt RViz |
-| `x`, `y`, `z`, `yaw` | `0.0` | Pose spawn của robot |
-
-Mapping hỗ trợ thêm `sync:=true|false`. Navigation hỗ trợ `map:=<đường dẫn>`.
-
-Ví dụ:
-
-```bash
-ros2 launch turtlebot_simu mapping.launch.py \
-  world:=maze model:=standard sync:=true
-```
-
-## Topics chính
-
-| Topic | Nội dung |
-|---|---|
-| `/scan` | Dữ liệu LaserScan từ LiDAR |
-| `/odom` | Odometry của robot |
-| `/cmd_vel` | Lệnh vận tốc gửi tới robot |
-| `/map` | Occupancy grid từ SLAM hoặc map server |
-| `/tf`, `/tf_static` | Quan hệ giữa `map`, `odom`, `base_link` và sensor |
-| `/plan` | Global path do Nav2 tạo |
-| `/particle_cloud` | Các giả thuyết pose của AMCL |
-
-## Cấu trúc package
-
-```text
-turtlebot_simu/
-├── launch/
-│   ├── simulation.launch.py
-│   ├── mapping.launch.py
-│   └── navigation.launch.py
-├── turtlebot_simu/
-│   ├── topic_check.py
-│   ├── save_map.py
-│   └── waypoint_nav.py
-├── config/waypoints.yaml
-├── maps/map.yaml
-├── maps/map.pgm
-└── docs/BAO_CAO.md
-```
-
-## Lỗi thường gặp
-
-Không tìm thấy package:
-
-```text
-Package 'turtlebot4_ignition_bringup' not found
-```
-
-Cài lại dependency, source và build lại workspace.
-
-RViz báo `Frame [map] does not exist`: kiểm tra Gazebo đã bấm Play, `/scan` và
-`/odom` đang publish, đồng thời SLAM hoặc localization đang chạy.
-
-Gazebo đứng ở `Requesting list of world names`: world `warehouse` đang tải
-nhiều model từ Gazebo Fuel. Dùng `world:=maze` để chạy hoàn toàn bằng asset có
-sẵn trên máy. Chỉ dùng `warehouse` sau khi mạng đã tải xong toàn bộ model.
-
-Nếu sau khi bấm `Ctrl+C` xuất hiện stack trace Qt/QML hoặc `Segmentation fault`
-của `ign gazebo gui`, đây là lỗi lúc đóng GUI của Ignition Fortress. Simulation
-không lỗi nếu trước đó robot hoạt động và health check đã báo đủ ba dòng `PASS`.
-
-Các dòng `process has not terminated`, `SIGTERM` hoặc `SIGKILL` lúc thoát thường
-do đóng Gazebo rồi nhấn `Ctrl+C` nhiều lần trước khi ROS hoàn tất shutdown. Build
-lại package để nhận cơ chế tự shutdown mới, sau đó chỉ nhấn `Ctrl+C` một lần và
-chờ khoảng 10 giây.
-
-Gazebo mở được world nhưng không thấy robot và terminal chỉ lặp
-`Waiting messages on topic [robot_description]`: Fast DDS có thể còn
-shared-memory từ lần bị `SIGKILL`. Dừng toàn bộ ROS/Gazebo, dọn các file zombie
-rồi chạy lại:
-
-```bash
-/opt/ros/humble/bin/fastdds shm clean
-export ROS_LOCALHOST_ONLY=1
-```
-
-AMCL không xác định được pose: dùng **2D Pose Estimate**, chọn đúng vị trí và
-hướng robot rồi di chuyển robot một đoạn ngắn.
-
-Nav2 không nhận goal: kiểm tra AMCL đã hội tụ, goal nằm trong vùng trống và các
-Nav2 lifecycle node đang ở trạng thái `active`:
+Kiểm tra đã undock, đã đặt initial pose và các node đều ở trạng thái `active`:
 
 ```bash
 ros2 lifecycle get /amcl
 ros2 lifecycle get /planner_server
 ros2 lifecycle get /controller_server
+ros2 lifecycle get /bt_navigator
 ```
+
+Nếu LaserScan lệch với tường, đặt lại **2D Pose Estimate** và kiểm tra đang
+dùng đúng world/map. Chỉ gửi goal khi localization đã khớp.
+
+### Kết thúc Navigation
+
+Nhấn `Ctrl+C` một lần ở terminal waypoint (nếu đang chạy), sau đó ở Terminal 1.
+Chờ Gazebo và các node dừng hoàn toàn.
+
+## File và topic chính
+
+| File | Vai trò |
+|---|---|
+| `launch/mapping.launch.py` | Phần 1: Gazebo + SLAM + RViz |
+| `launch/navigation.launch.py` | Phần 2: Gazebo + AMCL + Nav2 + RViz |
+| `worlds/small_room.sdf` | World phòng nhỏ 6 × 6 m |
+| `maps/small_room.yaml`, `maps/small_room.pgm` | Map thật cần tạo ở Phần 1, dùng ở Phần 2 |
+| `config/nav2.yaml` | Cấu hình planner, controller và costmap |
+| `config/slam.yaml` | Cấu hình SLAM nhẹ cho mapping |
+| `config/waypoints.yaml` | Các goal cho node waypoint |
+| `config/waypoints_small_room.yaml` | Goal mẫu riêng cho phòng nhỏ |
+| `docs/BAO_CAO.md` | Mẫu báo cáo |
+
+| Topic | Nội dung |
+|---|---|
+| `/scan` | LaserScan từ LiDAR |
+| `/odom` | Odometry |
+| `/cmd_vel` | Lệnh vận tốc |
+| `/map` | Bản đồ từ SLAM hoặc map server |
+| `/tf`, `/tf_static` | Transform giữa map, odom, robot và sensor |
+| `/plan` | Đường đi do Nav2 lập |
+| `/particle_cloud` | Các giả thuyết vị trí của AMCL |
 
 ## Checklist nộp bài
 
-- `maps/map.yaml` và `maps/map.pgm` là map được tạo từ SLAM, không phải map mẫu.
-- Video có quá trình mapping, map hoàn chỉnh, load map và localization.
-- Video có ít nhất ba navigation goal thành công, không dùng teleop sau khi đặt goal.
-- Google Drive bật quyền xem công khai.
-- GitHub Public chứa source, launch, map, config và README.
-- Hoàn thiện `docs/BAO_CAO.md`, thêm ảnh/link thật và xuất thành PDF.
+- [ ] Map thật đã lưu, không còn `STARTER MAP ONLY`.
+- [ ] Video có quá trình quét map và bản đồ hoàn chỉnh.
+- [ ] Video có load lại map, localization và ít nhất 3 goal thành công.
+- [ ] Không dùng teleop sau khi gửi navigation goal.
+- [ ] GitHub Public chứa source, launch, config, map và README.
+- [ ] Link video có quyền xem công khai.
+- [ ] Báo cáo có hình kết quả, link video/GitHub và được xuất PDF.
 
-Tài liệu:
+## Tài liệu tham khảo
 
 - [TurtleBot 4 Simulator](https://turtlebot.github.io/turtlebot4-user-manual/software/turtlebot4_simulator.html)
 - [TurtleBot 4 Navigation](https://turtlebot.github.io/turtlebot4-user-manual/tutorials/navigation.html)
