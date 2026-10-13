@@ -31,9 +31,11 @@ def configure_gazebo(context):
     return [SetLaunchConfiguration('gz_args', shlex.join(arguments))]
 
 
-def world_launch_arguments():
+def world_launch_arguments(headless_default='false'):
+    """Declare shared Gazebo arguments with a launch-specific GUI default."""
     return [
-        DeclareLaunchArgument('headless', default_value='false', choices=['true', 'false'],
+        DeclareLaunchArgument('headless', default_value=headless_default,
+                             choices=['true', 'false'],
                              description='Run Gazebo server without its GUI.'),
         DeclareLaunchArgument('gz_args', default_value='',
                              description='Optional complete Gazebo command-line override.'),

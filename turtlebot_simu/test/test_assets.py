@@ -92,7 +92,8 @@ def test_launch_defaults_to_small_room(name):
         if isinstance(action, DeclareLaunchArgument):
             action.execute(context)
     assert context.launch_configurations['world'] == 'small_room'
-    assert context.launch_configurations['headless'] == 'false'
+    expected = 'true' if name == 'navigation' else 'false'
+    assert context.launch_configurations['headless'] == expected
 
 
 def test_map_yaml_references_existing_image():
@@ -138,6 +139,17 @@ def load_launch(name):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_navigation_reports_missing_middleware_before_spawning(monkeypatch):
+    module = load_launch('navigation')
+
+    def missing(_name):
+        raise module.PackageNotFoundError('rmw_cyclonedds_cpp')
+
+    monkeypatch.setattr(module, 'get_package_share_directory', missing)
+    with pytest.raises(RuntimeError, match='sudo apt install ros-humble-rmw-cyclonedds-cpp'):
+        module.validate_middleware(LaunchContext())
 
 
 @pytest.mark.parametrize('name', ['simulation', 'mapping', 'navigation'])
@@ -215,6 +227,29 @@ def test_nav2_maps_use_correct_sources():
     assert 'static_layer' in global_map['plugins']
     assert local['voxel_layer']['scan']['data_type'] == 'LaserScan'
     assert local['use_sim_time'] and global_map['use_sim_time']
+
+
+def test_navigation_profiles_bound_runtime_and_render_load():
+    nav2 = yaml.safe_load((ROOT / 'config' / 'nav2.yaml').read_text())
+    controller = nav2['controller_server']['ros__parameters']
+    bt = nav2['bt_navigator']['ros__parameters']
+    local = nav2['local_costmap']['local_costmap']['ros__parameters']
+    global_map = nav2['global_costmap']['global_costmap']['ros__parameters']
+    amcl = yaml.safe_load((ROOT / 'config' / 'localization.yaml').read_text())['amcl'][
+        'ros__parameters'
+    ]
+    rviz = yaml.safe_load((ROOT / 'config' / 'navigation.rviz').read_text())
+    assert local['global_frame'] == 'map'
+    assert not local['voxel_layer']['publish_voxel_map']
+    assert not local['always_send_full_costmap']
+    assert not global_map['always_send_full_costmap']
+    assert amcl['max_particles'] <= 800
+    assert amcl['max_beams'] <= 40
+    assert controller['controller_frequency'] <= 5.0
+    assert controller['progress_checker']['required_movement_radius'] <= 0.05
+    assert controller['progress_checker']['movement_time_allowance'] >= 60.0
+    assert bt['bt_loop_duration'] >= 50
+    assert rviz['Visualization Manager']['Global Options']['Frame Rate'] <= 10
 
 
 def test_action_success_does_not_prove_arrival():

@@ -38,6 +38,7 @@ sudo apt install \
   ros-humble-navigation2 \
   ros-humble-nav2-bringup \
   ros-humble-nav2-simple-commander \
+  ros-humble-rmw-cyclonedds-cpp \
   ros-humble-teleop-twist-keyboard
 ```
 
@@ -239,8 +240,42 @@ Navigation mặc định tìm `maps/small_room.yaml`; phải lưu map thật tr�
 Nếu dùng lại `world:=maze`, truyền `map:=...` trỏ tới map đã quét của maze.
 Giữ terminal này chạy trong suốt quá trình navigation.
 
-Trong Gazebo, bấm **Play** nếu cần. Trong RViz giữ **Fixed Frame = `map`**
-và bật **Map**, Topic `/map`.
+Launch mới chờ localization sẵn sàng rồi mới khởi động Nav2. Mặc định nó
+gửi initial pose `(0, 0, 0)` một lần trong frame `map`, phù hợp khi map được
+quét từ vị trí xuất phát này. Chờ dòng `Localization ready` trước khi gửi goal.
+Tọa độ spawn trong Gazebo (`x`, `y`, `yaw`) và pose trong map có thể khác nhau.
+Với map có gốc/hướng khác, truyền `initial_x:=... initial_y:=... initial_yaw:=...`
+hoặc dùng `auto_initial_pose:=false` và đặt **2D Pose Estimate** trong RViz.
+Trong chế độ thủ công, Navigation chưa active trước khi đặt pose là bình thường;
+Localization vẫn active và RViz vẫn mở để bạn đặt pose. Sau 180 giây chưa có
+pose/TF hợp lệ, launch dừng với thông báo nguyên nhân thay vì khởi động Nav2
+trong trạng thái thiếu TF. Có thể tăng bằng `localization_timeout:=300`.
+
+Navigation dùng Cyclone DDS và `config/cyclonedds.xml` cho discovery trên
+localhost. Cài một lần bằng `sudo apt install ros-humble-rmw-cyclonedds-cpp`.
+Trong các terminal gửi action/goal hoặc kiểm tra topic, dùng cùng middleware:
+
+```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI="file://$PWD/turtlebot_simu/config/cyclonedds.xml"
+```
+
+Controller dùng DWB chuẩn TurtleBot 4 với số mẫu giảm xuống 8 × 12 để giới
+hạn tải tính toán, chạy trong container với executor riêng cho từng component.
+Local costmap và global plan dùng cùng frame `map`. Timeout xác nhận action
+của Behavior Tree là 2000 ms, thay cho 20 ms quá ngắn khi máy bận.
+
+Navigation mặc định chạy Gazebo ở chế độ `headless:=true`: không có cửa sổ
+Gazebo, nhưng mô phỏng vẫn tự chạy và RViz vẫn hiển thị map/scan. Chế độ này
+tránh Gazebo GUI và RViz tranh GPU, đặc biệt trên máy không dùng được NVIDIA
+driver. Chỉ khi thật sự cần xem cửa sổ Gazebo mới chạy thêm `headless:=false`.
+Navigation mặc định dùng `model:=lite` để giảm tải camera; có thể chọn lại
+`model:=standard` nếu cần. Mapping và simulation vẫn giữ model mặc định cũ.
+
+RViz dùng cấu hình nhẹ `config/navigation.rviz`, giới hạn 10 FPS và chỉ bật
+Map, LaserScan, AMCL particles và global path. Global/Local Costmap và TF vẫn
+có trong danh sách nhưng mặc định tắt; chỉ bật tạm từng display khi cần debug.
+Giữ **Fixed Frame = `map`** và Map topic `/map`.
 
 ### Terminal 2: undock
 
@@ -249,6 +284,8 @@ cd ~/ur_robot_drawing
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 export ROS_LOCALHOST_ONLY=1
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI="file://$PWD/turtlebot_simu/config/cyclonedds.xml"
 
 ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
 ```
@@ -257,9 +294,12 @@ Chờ kết quả `SUCCEEDED`.
 
 ### Trên RViz: định vị và gửi goal
 
-1. Chọn **2D Pose Estimate**.
-2. Nhấp vào vị trí hiện tại của robot trên bản đồ và kéo mũi tên đúng hướng.
-3. Chờ particle cloud hội tụ, kiểm tra LaserScan trùng với tường.
+1. Với `auto_initial_pose:=false`, chọn **2D Pose Estimate**. Ở chế độ tự động,
+   chỉ đặt lại pose nếu scan không khớp map.
+2. Khi đặt lại pose, nhấp vào vị trí hiện tại của robot trên bản đồ và kéo
+   mũi tên đúng hướng.
+3. Chờ particle cloud hội tụ, LaserScan trùng với tường và hai trạng thái
+   **Navigation**, **Localization** trong panel Navigation 2 đều là `active`.
 4. Chọn **Nav2 Goal**, nhấp vào vùng trắng và kéo mũi tên theo hướng muốn tới.
 5. Chờ robot đến đích rồi đặt goal tiếp theo ở vị trí khác.
 
@@ -308,6 +348,14 @@ ros2 lifecycle get /bt_navigator
 
 Nếu LaserScan lệch với tường, đặt lại **2D Pose Estimate** và kiểm tra đang
 dùng đúng world/map. Chỉ gửi goal khi localization đã khớp.
+
+Nếu log lặp `Control loop missed its desired rate` hoặc `Failed to make
+progress` trong khi robot vẫn nhích, cần build lại để nhận profile mô phỏng
+nhẹ trong `config/nav2.yaml`. Profile chạy controller ở 5 Hz và cho phép 60
+giây để robot dịch chuyển 5 cm hoặc quay 0.1 radian. `PoseProgressChecker`
+tính cả việc quay hướng vào đường đi sau undock, tránh recovery nhầm.
+Nếu `/hazard_detection` có phần tử hoặc `/stop_status` báo
+`is_stopped: true`, xử lý trạng thái an toàn đó trước khi gửi goal mới.
 
 ### Kết thúc Navigation
 
