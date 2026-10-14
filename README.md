@@ -362,39 +362,7 @@ Nếu `/hazard_detection` có phần tử hoặc `/stop_status` báo
 Nhấn `Ctrl+C` một lần ở terminal waypoint (nếu đang chạy), sau đó ở Terminal 1.
 Chờ Gazebo và các node dừng hoàn toàn.
 
-## File và topic chính
 
-| File | Vai trò |
-|---|---|
-| `launch/mapping.launch.py` | Phần 1: Gazebo + SLAM + RViz |
-| `launch/navigation.launch.py` | Phần 2: Gazebo + AMCL + Nav2 + RViz |
-| `worlds/small_room.sdf` | World phòng nhỏ 6 × 6 m |
-| `maps/small_room.yaml`, `maps/small_room.pgm` | Map thật cần tạo ở Phần 1, dùng ở Phần 2 |
-| `config/nav2.yaml` | Cấu hình planner, controller và costmap |
-| `config/slam.yaml` | Cấu hình SLAM nhẹ cho mapping |
-| `config/waypoints.yaml` | Các goal cho node waypoint |
-| `config/waypoints_small_room.yaml` | Goal mẫu riêng cho phòng nhỏ |
-| `docs/BAO_CAO.md` | Mẫu báo cáo |
-
-| Topic | Nội dung |
-|---|---|
-| `/scan` | LaserScan từ LiDAR |
-| `/odom` | Odometry |
-| `/cmd_vel` | Lệnh vận tốc |
-| `/map` | Bản đồ từ SLAM hoặc map server |
-| `/tf`, `/tf_static` | Transform giữa map, odom, robot và sensor |
-| `/plan` | Đường đi do Nav2 lập |
-| `/particle_cloud` | Các giả thuyết vị trí của AMCL |
-
-## Checklist nộp bài
-
-- [ ] Map thật đã lưu, không còn `STARTER MAP ONLY`.
-- [ ] Video có quá trình quét map và bản đồ hoàn chỉnh.
-- [ ] Video có load lại map, localization và ít nhất 3 goal thành công.
-- [ ] Không dùng teleop sau khi gửi navigation goal.
-- [ ] GitHub Public chứa source, launch, config, map và README.
-- [ ] Link video có quyền xem công khai.
-- [ ] Báo cáo có hình kết quả, link video/GitHub và được xuất PDF.
 
 ## Tài liệu tham khảo
 
