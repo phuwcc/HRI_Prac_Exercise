@@ -1,0 +1,3 @@
+# ROS 2 Humble cv_bridge binaries are built against the NumPy 1.x ABI.
+numpy>=1.23.0,<2
+ultralytics>=8.0,<9
