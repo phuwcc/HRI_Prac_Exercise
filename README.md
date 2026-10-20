@@ -175,9 +175,14 @@ File `config/waypoints_small_room.yaml`:
 
 | Goal | x (m) | y (m) | yaw (rad) |
 |---|---:|---:|---:|
-| 1 | -2.0 | -2.0 | 0.0 |
-| 2 | 2.0 | 1.5 | 1.57 |
-| 3 | -2.0 | 2.3 | 3.14 |
+| 1 | -1.8 | -1.5 | 1.57 |
+| 2 | -1.8 | -0.2 | -0.38 |
+| 3 | -0.8 | -0.6 | 0.0 |
+
+Tuyến ngắn nằm trong vùng trống phía tây nam của map đi kèm, tránh vách ngăn,
+khối hộp, trụ và dock. Phải kiểm tra lại tọa độ khi thay map hoặc initial pose.
+Nếu LaserScan lệch rõ khỏi tường trên map, dừng mission và kiểm tra localization;
+đổi waypoint không khắc phục được lỗi định vị.
 
 ## 8. Topic chính
 

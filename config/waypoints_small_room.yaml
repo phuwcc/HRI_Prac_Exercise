@@ -1,6 +1,7 @@
-# Examples for small_room at the default spawn pose. Check against your SLAM map.
-# These points do not certify that mapping/localization/navigation succeeded.
+# Short route in the open southwest area of the bundled small_room map.
+# Avoid crossing the partition or approaching the box/cylinder and dock.
+# Recheck coordinates after replacing the map or changing the initial pose.
 goals:
-  - {x: -2.0, y: -2.0, yaw: 0.0}
-  - {x: 2.0, y: 1.5, yaw: 1.57}
-  - {x: -2.0, y: 2.3, yaw: 3.14}
+  - {x: -1.8, y: -1.5, yaw: 1.57}
+  - {x: -1.8, y: -0.2, yaw: -0.38}
+  - {x: -0.8, y: -0.6, yaw: 0.0}
