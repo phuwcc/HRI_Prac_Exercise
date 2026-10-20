@@ -1,23 +1,33 @@
 # Bài 5 — TurtleBot 4 Navigation + YOLO
 
-Package ROS 2: `ttbot4_nav_detect`  
-Môi trường: Ubuntu 22.04, ROS 2 Humble, TurtleBot 4 Simulation.
+Package ROS 2: `ttbot4_nav_detect`
 
-Package thực hiện đầy đủ bốn phần của đề:
+Package này chạy chung trong **một launch**:
 
-- Mở `small_room.sdf`, nạp `maps/small_room.yaml`, chạy AMCL và Nav2.
-- Tự đặt initial pose mặc định `(0, 0, 0)` trong frame `map`.
-- Tự undock và đi tuần tự qua ba tọa độ trong
-  `config/waypoints_small_room.yaml` bằng `nav2_simple_commander`.
-- Subscribe camera RGB, chạy Ultralytics YOLO, in kết quả ra terminal,
-  publish ảnh có bounding box lên `/yolo/annotated_image`, và publish JSON
-  nhận diện lên `/yolo/detections`.
+- Gazebo với world `small_room`;
+- map, AMCL và Nav2;
+- tự undock và chạy ba waypoint;
+- camera OAK-D mô phỏng;
+- YOLO và ảnh có bounding box ngay trong RViz.
 
-## 1. Cài dependency
+> **Quan trọng:** `turtlebot_simu` là package bài Navigation, không có YOLO.
+> Nếu tiêu đề RViz chứa `install/turtlebot_simu/.../navigation.rviz` thì bạn
+> đang chạy nhầm package. Tiêu đề đúng phải chứa
+> `install/ttbot4_nav_detect/.../navigation.rviz`.
+
+## 1. Cài đặt lần đầu — copy toàn bộ khối này
+
+Yêu cầu Ubuntu 22.04, ROS 2 Humble và Conda environment `hri` đã được tạo.
 
 ```bash
+cd ~/ur_robot_drawing
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hri
+source /opt/ros/humble/setup.bash
+
 sudo apt update
-sudo apt install \
+sudo apt install -y \
   ros-humble-turtlebot4-simulator \
   ros-humble-turtlebot4-navigation \
   ros-humble-nav2-simple-commander \
@@ -25,75 +35,143 @@ sudo apt install \
   ros-humble-rmw-cyclonedds-cpp \
   python3-opencv
 
-python3 -m pip install --user -r 'ttbot4_nav+detect/requirements.txt'
+python -m pip install -r 'ttbot4_nav+detect/requirements.txt'
+rosdep install --ignore-src --from-paths 'ttbot4_nav+detect' -r -y
+
+colcon build --packages-select ttbot4_nav_detect --symlink-install
 ```
 
-ROS 2 Humble `cv_bridge` trên Ubuntu 22.04 thường được biên dịch với NumPy 1.x.
-Nếu terminal báo `_ARRAY_API not found`, cần dùng `numpy<2` như lệnh trên.
+Không dùng `pip install --user` trong Conda. ROS 2 Humble `cv_bridge` cần
+`numpy<2`; giới hạn này đã có trong `requirements.txt`.
 
-Model mặc định là `yolov8n.pt`. Ultralytics sẽ tải weight ở lần chạy đầu nếu
-file chưa có. Có thể tải trước và truyền đường dẫn local bằng `yolo_model:=...`.
+## 2. Chạy toàn bộ bài — copy toàn bộ khối này
 
-## 2. Build
+Trước tiên, nhấn `Ctrl+C` ở các terminal Gazebo, Nav2 hoặc RViz cũ. Chỉ để một
+simulation chạy tại một thời điểm. Sau đó mở terminal mới và chạy:
 
 ```bash
 cd ~/ur_robot_drawing
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hri
 source /opt/ros/humble/setup.bash
-rosdep install --ignore-src --from-paths 'ttbot4_nav+detect' -r -y
+
 colcon build --packages-select ttbot4_nav_detect --symlink-install
 source install/setup.bash
+export ROS_LOCALHOST_ONLY=1
+
+test -f "$PWD/yolov8n.pt" || {
+  echo "THIEU MODEL: $PWD/yolov8n.pt"
+  exit 1
+}
+
+ros2 launch ttbot4_nav_detect coursework.launch.py \
+  rviz:=true \
+  headless:=true \
+  detect:=true \
+  run_mission:=true \
+  yolo_model:="$PWD/yolov8n.pt" \
+  inference_hz:=2.0
 ```
 
-## 3. Chạy toàn bộ bài bằng một lệnh
+Không chạy thêm `turtlebot_simu navigation.launch.py`, `waypoint_nav` hoặc
+RQt trong lúc launch trên đang chạy. `coursework.launch.py` đã chạy toàn bộ
+navigation, waypoint và YOLO.
 
-Tắt các tiến trình Gazebo/Nav2 cũ trước khi chạy:
+## 3. Phải thấy gì trong RViz?
+
+Sau khi launch hoàn tất:
+
+1. Thanh tiêu đề RViz chứa `install/ttbot4_nav_detect/.../navigation.rviz`.
+2. Cột **Displays** có mục **YOLO Camera** và ô Enabled được bật.
+3. **YOLO Camera** dùng topic `/yolo/annotated_image`.
+4. Map, LaserScan, AMCL và Global Path vẫn hiển thị như bình thường.
+5. Terminal có dòng `YOLO ready` và các kết quả nhận diện nếu có vật thuộc
+   lớp mà model nhận ra.
+
+Camera mô phỏng nhìn theo hướng trước của robot. Nếu ảnh không có bounding box
+thì có thể camera vẫn hoạt động nhưng trong khung hình chưa có vật mà model
+COCO nhận diện được.
+
+## 4. Kiểm tra ảnh — mở Terminal 2 và copy khối này
+
+Giữ launch ở Terminal 1 đang chạy. Mở Terminal 2:
 
 ```bash
 cd ~/ur_robot_drawing
+
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hri
 source /opt/ros/humble/setup.bash
 source install/setup.bash
+export ROS_LOCALHOST_ONLY=1
 
-ros2 launch ttbot4_nav_detect coursework.launch.py
+echo '=== NODE YOLO ==='
+ros2 node list | grep object_detector
+
+echo '=== CAMERA GOC ==='
+timeout 8 ros2 topic hz /oakd/rgb/preview/image_raw
+
+echo '=== ANH YOLO ==='
+timeout 8 ros2 topic hz /yolo/annotated_image
+
+echo '=== THONG TIN TOPIC YOLO ==='
+ros2 topic info /yolo/annotated_image
 ```
 
-Mặc định launch sẽ:
+Kết quả đúng:
 
-1. Chạy Gazebo headless với TurtleBot 4 Standard trong `small_room`.
-2. Nạp map, chạy AMCL và gửi initial pose `(0, 0, 0)`.
-3. Chỉ khởi động Nav2 sau khi map, scan, AMCL và TF đã hợp lệ.
-4. Chạy YOLO trên `/oakd/rgb/preview/image_raw`.
-5. Tự undock và lần lượt đi Goal 1 → Goal 2 → Goal 3.
+- có node `/object_detector`;
+- camera gốc khoảng 20–30 Hz;
+- ảnh YOLO gần mức `inference_hz` đã chọn, ví dụ khoảng 2 Hz;
+- `/yolo/annotated_image` có ít nhất một publisher và RViz tạo subscriber.
 
-Muốn xem cả cửa sổ Gazebo:
+Xem JSON nhận diện:
 
 ```bash
-ros2 launch ttbot4_nav_detect coursework.launch.py headless:=false
+ros2 topic echo /yolo/detections
 ```
 
-Chỉ kiểm tra localization/Nav2, chưa tự chạy waypoint và chưa chạy YOLO:
+## 5. Nếu RViz vẫn không có ảnh
+
+| Hiện tượng | Nguyên nhân và cách xử lý |
+|---|---|
+| Tiêu đề chứa `install/turtlebot_simu` | Đang chạy nhầm package. Dừng launch đó và chạy đúng khối ở mục 2. |
+| Không có mục **YOLO Camera** | Build/source chưa cập nhật. Chạy lại đầy đủ mục 2. |
+| Có YOLO Camera nhưng màu xám | Mở mục đó, kiểm tra Topic là `/yolo/annotated_image` và Enabled đang bật. |
+| Không có `/object_detector` | Xem lỗi trong Terminal 1; thường do chưa `conda activate hri` hoặc thiếu model. |
+| Camera gốc có Hz nhưng ảnh YOLO không có Hz | YOLO bị lỗi thư viện/model; kiểm tra dòng `object_detector` trong Terminal 1. |
+| Cả hai topic đều không có Hz | Gazebo/camera bridge chưa chạy hoặc đang có simulation cũ xung đột. |
+
+Không cần dùng `rqt_image_view`. Cấu hình RViz đã subscribe trực tiếp ảnh YOLO.
+
+## 6. Chạy không tự đi waypoint
+
+Để robot đứng yên khi kiểm tra camera và YOLO:
 
 ```bash
+cd ~/ur_robot_drawing
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hri
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export ROS_LOCALHOST_ONLY=1
+
 ros2 launch ttbot4_nav_detect coursework.launch.py \
-  run_mission:=false detect:=false
+  rviz:=true \
+  headless:=true \
+  detect:=true \
+  run_mission:=false \
+  yolo_model:="$PWD/yolov8n.pt" \
+  inference_hz:=2.0
 ```
 
-Nếu initial pose của map khác vị trí xuất phát mặc định:
+Muốn mở cả giao diện Gazebo, đổi `headless:=true` thành `headless:=false`.
+Việc mở đồng thời Gazebo GUI và RViz sẽ dùng GPU nhiều hơn.
 
-```bash
-ros2 launch ttbot4_nav_detect coursework.launch.py \
-  initial_x:=0.5 initial_y:=-0.2 initial_yaw:=1.57
-```
+## 7. Waypoint đang dùng
 
-Hoặc đặt thủ công bằng **2D Pose Estimate** trong RViz:
-
-```bash
-ros2 launch ttbot4_nav_detect coursework.launch.py \
-  auto_initial_pose:=false run_mission:=false
-```
-
-## 4. Tọa độ mục tiêu
-
-Ba điểm hiện tại trong `config/waypoints_small_room.yaml`:
+File `config/waypoints_small_room.yaml`:
 
 | Goal | x (m) | y (m) | yaw (rad) |
 |---|---:|---:|---:|
@@ -101,54 +179,22 @@ Ba điểm hiện tại trong `config/waypoints_small_room.yaml`:
 | 2 | 2.0 | 1.5 | 1.57 |
 | 3 | -2.0 | 2.3 | 3.14 |
 
-Các điểm này nằm trong vùng trống của map `small_room` đi kèm. Nếu quét lại
-map hoặc đổi world, lấy tọa độ mới bằng RViz rồi sửa YAML:
+## 8. Topic chính
 
-```bash
-ros2 topic echo /clicked_point
-ros2 topic echo /amcl_pose
-```
+| Topic | Nội dung |
+|---|---|
+| `/oakd/rgb/preview/image_raw` | Ảnh RGB gốc từ camera mô phỏng |
+| `/yolo/annotated_image` | Ảnh đã vẽ bounding box để RViz hiển thị |
+| `/yolo/detections` | Kết quả nhận diện dạng JSON |
+| `/scan` | LiDAR |
+| `/map` | Occupancy map |
+| `/amcl_pose` | Pose robot do AMCL ước lượng |
 
-Node waypoint kiểm tra từng goal với occupancy grid trước khi chạy và từ chối
-goal ngoài map, trong vùng unknown, hoặc quá gần vật cản.
+## 9. File chính
 
-## 5. Kiểm tra camera và YOLO
-
-```bash
-ros2 topic hz /oakd/rgb/preview/image_raw
-ros2 topic echo /yolo/detections
-ros2 topic hz /yolo/annotated_image
-```
-
-Trong RViz, thêm display **Image** và chọn `/yolo/annotated_image` để xem ảnh
-có bounding box. Cách này nhẹ và ổn định hơn cửa sổ OpenCV. Nếu muốn bật cửa
-sổ OpenCV:
-
-```bash
-ros2 launch ttbot4_nav_detect coursework.launch.py \
-  headless:=false show_window:=true
-```
-
-Đổi model, ngưỡng và tốc độ suy luận:
-
-```bash
-ros2 launch ttbot4_nav_detect coursework.launch.py \
-  yolo_model:=yolo11n.pt confidence:=0.50 inference_hz:=3.0
-```
-
-Nếu topic RGB thực tế khác tên, xem danh sách rồi truyền lại:
-
-```bash
-ros2 topic list | grep -E 'image_raw|rgb'
-ros2 launch ttbot4_nav_detect coursework.launch.py \
-  image_topic:=/ten/topic/camera/thuc/te
-```
-
-## 6. Các file chính
-
-- `launch/coursework.launch.py`: launch toàn bộ hệ thống.
-- `ttbot4_nav_detect/navigation_ready.py`: kiểm tra map/scan/AMCL/TF và initial pose.
-- `ttbot4_nav_detect/waypoint_mission.py`: undock và chạy ba goal bằng code.
-- `ttbot4_nav_detect/object_detector.py`: `Image` → `cv_bridge` → YOLO → ảnh/JSON.
-- `config/waypoints_small_room.yaml`: các tọa độ `(x, y, yaw)`.
-- `maps/small_room.yaml`, `maps/small_room.pgm`: map đã quét.
+- `launch/coursework.launch.py`: chạy simulation, localization, Nav2, mission,
+  YOLO và RViz.
+- `config/navigation.rviz`: có sẵn display **YOLO Camera**.
+- `ttbot4_nav_detect/object_detector.py`: nhận ảnh, chạy YOLO và publish kết quả.
+- `ttbot4_nav_detect/navigation_ready.py`: chờ map, scan, AMCL và TF hợp lệ.
+- `ttbot4_nav_detect/waypoint_mission.py`: undock và chạy ba goal.

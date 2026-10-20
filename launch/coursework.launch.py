@@ -24,7 +24,7 @@ from launch_ros.actions import Node, PushRosNamespace, SetRemap
 from launch_ros.parameter_descriptions import ParameterValue
 import yaml
 
-from ttbot4_nav_detect.launch_support import world_launch_arguments
+from ttbot4_nav_detect.launch_support import detector_environment, world_launch_arguments
 
 
 def validate_map(context):
@@ -178,6 +178,7 @@ def generate_launch_description():
         name='object_detector',
         namespace=LaunchConfiguration('namespace'),
         output='screen',
+        additional_env=detector_environment(),
         parameters=[{
             'use_sim_time': True,
             'image_topic': LaunchConfiguration('image_topic'),

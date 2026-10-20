@@ -5,6 +5,7 @@ import pytest
 import yaml
 
 from ttbot4_nav_detect.object_detector import detections_from_result
+from ttbot4_nav_detect.launch_support import detector_environment
 from ttbot4_nav_detect.waypoint_mission import load_goals
 
 
@@ -64,3 +65,23 @@ def test_yolo_result_is_converted_to_metadata():
         'confidence': 0.876,
         'bbox_xyxy': [10.0, 20.1, 30.1, 40.0],
     }]
+
+
+def test_conda_packages_are_exposed_to_detector(monkeypatch, tmp_path):
+    prefix = tmp_path / 'hri'
+    existing = '/opt/ros/humble/local/lib/python3.10/dist-packages'
+    monkeypatch.setenv('CONDA_PREFIX', str(prefix))
+    monkeypatch.setenv('PYTHONPATH', existing)
+
+    result = detector_environment()
+    expected = prefix / 'lib' / 'python3.10' / 'site-packages'
+    assert result['PYTHONPATH'].split(':') == [str(expected), existing]
+
+
+def test_rviz_subscribes_to_yolo_annotated_image():
+    config = yaml.safe_load((ROOT / 'config' / 'navigation.rviz').read_text())
+    displays = config['Visualization Manager']['Displays']
+    camera = next(display for display in displays if display.get('Name') == 'YOLO Camera')
+    assert camera['Class'] == 'rviz_default_plugins/Image'
+    assert camera['Enabled'] is True
+    assert camera['Topic']['Value'] == '/yolo/annotated_image'

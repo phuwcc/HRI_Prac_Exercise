@@ -1,11 +1,30 @@
 """Helpers for resolving the package-local Gazebo world."""
 
+import os
 from pathlib import Path
 import shlex
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetLaunchConfiguration
 from launch.substitutions import LaunchConfiguration
+
+
+def detector_environment(environment=None):
+    """Expose the active Conda packages to the ROS Python detector only."""
+    environment = os.environ if environment is None else environment
+    prefix = environment.get('CONDA_PREFIX', '')
+    if not prefix:
+        return {}
+
+    version = f'python{sys.version_info.major}.{sys.version_info.minor}'
+    site_packages = str(Path(prefix, 'lib', version, 'site-packages'))
+    current = environment.get('PYTHONPATH', '')
+    paths = [path for path in current.split(os.pathsep) if path]
+    if site_packages in paths:
+        paths.remove(site_packages)
+    paths.insert(0, site_packages)
+    return {'PYTHONPATH': os.pathsep.join(paths)}
 
 
 def configure_gazebo(context):
