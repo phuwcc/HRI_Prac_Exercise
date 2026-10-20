@@ -1,133 +1,315 @@
-# UR Robot Workspace
+# TurtleBot 4 — copy một khối cho một terminal
 
-Workspace ROS 2 Humble gồm nền tảng Universal Robots, Robotiq 2F-85, hai
-package ứng dụng trên branch riêng và package Bài 03 `ur_llm_camera` trong main.
+**Mỗi ô lệnh dưới đây là toàn bộ lệnh cho một terminal mới. Copy cả ô và chạy.**
+Các dòng `cd` và `source` đã có sẵn trong từng ô. Dùng Bash trên Ubuntu 22.04,
+ROS 2 Humble. `$HOME` tự lấy đúng tài khoản: `/home/phuc` trên laptop nếu đăng nhập
+bằng `phuc`, `/home/ubuntu` trên Pi nếu đăng nhập bằng `ubuntu`.
 
-## Cấu trúc branch
+**Máy đã cài và có map:** chạy các terminal Pi ở phần B, sau đó các terminal
+laptop ở phần A. **Máy mới:** làm phần D một lần trước. **Chưa có map:** làm phần C.
 
-| Branch | Nội dung |
-|---|---|
-| `main` | Universal Robots, Robotiq, Serial và hướng dẫn workspace |
-| `ur_drawing` | Package vẽ chữ P bằng MoveIt 2 |
-| `ur_llm_control` | Package điều khiển pick/place bằng Gemini |
+## A. LAPTOP — lệnh chạy trực tiếp trên laptop
 
-Hai branch ứng dụng được gắn vào `main` bằng Git worktree. Sau khi thiết lập,
-workspace có cấu trúc:
+Mở terminal trên laptop có màn hình. Terminal đã SSH vào Pi là terminal của Pi.
+Cấu hình mạng laptop được lưu ở `$HOME/.config/turtlebot4/pc_env.sh` bằng phần D2.
 
-```text
-ur_robot_drawing/
-├── Universal_Robots_ROS2_GZ_Simulation/
-├── ros2_robotiq_gripper/
-├── serial/
-├── ur_drawing/          # worktree của branch ur_drawing
-└── ur_llm_control/      # worktree của branch ur_llm_control
-```
-
-## 1. Clone main và dependency
+### LAPTOP — Terminal 1: mở RViz cho robot1
 
 ```bash
-git clone --recurse-submodules \
-  https://github.com/phuwcc/ur_robot_drawing.git
-cd ur_robot_drawing
-
-git submodule update --init --recursive
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/install/setup.bash"
+  source "$HOME/.config/turtlebot4/pc_env.sh"
+  ros2 launch tb4_multi_bringup visualization.launch.py robot_id:=robot1
+)
 ```
 
-Repo lưu một patch tương thích ROS 2 Humble/Gazebo cho Robotiq. Áp dụng patch
-một lần sau khi clone:
+Giữ cửa sổ này chạy.
+
+### LAPTOP — Terminal 2: mở RViz cho robot2
 
 ```bash
-git -C ros2_robotiq_gripper apply \
-  ../patches/ros2_robotiq_gripper_humble.patch
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/install/setup.bash"
+  source "$HOME/.config/turtlebot4/pc_env.sh"
+  ros2 launch tb4_multi_bringup visualization.launch.py robot_id:=robot2
+)
 ```
 
-## 2. Gắn hai branch vào workspace
+Giữ cửa sổ này chạy. Trên **từng RViz**, dùng **2D Pose Estimate** đặt đúng vị trí
+và hướng thực tế của robot; khi scan khớp tường trên map, dùng **Nav2 Goal**.
+Không đặt cả hai robot ở `(0,0,0)` nếu chúng đứng khác chỗ.
 
-Tạo local branch theo remote rồi gắn chúng thành hai thư mục con:
+### LAPTOP — Terminal 3: kiểm tra cả hai robot
 
 ```bash
-git fetch origin
-git branch --track ur_drawing origin/ur_drawing
-git branch --track ur_llm_control origin/ur_llm_control
-
-git worktree add ./ur_drawing refs/heads/ur_drawing
-git worktree add ./ur_llm_control refs/heads/ur_llm_control
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/install/setup.bash"
+  source "$HOME/.config/turtlebot4/pc_env.sh"
+  ros2 daemon stop
+  ros2 node list --no-daemon --spin-time 10
+  ros2 topic info /robot1/scan --verbose --no-daemon --spin-time 5
+  ros2 topic info /robot1/odom --verbose --no-daemon --spin-time 5
+  ros2 topic info /robot2/scan --verbose --no-daemon --spin-time 5
+  ros2 topic info /robot2/odom --verbose --no-daemon --spin-time 5
+)
 ```
 
-Kiểm tra:
+Phải thấy node của cả `/robot1/...` và `/robot2/...`, mỗi robot có publisher
+`scan` và `odom` riêng. Hai RViz sử dụng hai cây TF `/robot1/tf` và `/robot2/tf`.
+
+## B. PI 1 VÀ PI 2 — chạy navigation khi đã có map
+
+Cần có **cả `site.yaml` và `site.pgm`** trong `$HOME/turtlebot4_ws/maps/`
+trên cả hai Pi. Dừng mapping và teleop trước khi chạy navigation.
+
+### PI 1 — Terminal 1: bật hardware robot1
+
+Khối này dừng dịch vụ bringup cũ rồi chạy hardware của repo. Nếu dịch vụ cũ
+đã phát đúng topic `/robot1/...`, giữ dịch vụ và bỏ qua terminal hardware này.
 
 ```bash
-git worktree list
-colcon list
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  sudo systemctl stop turtlebot4
+  bash "$HOME/turtlebot4_ws/scripts/robot.sh" robot1 hardware
+)
 ```
 
-Nếu local branch đã tồn tại, bỏ qua hai lệnh `git branch --track` và chỉ chạy
-hai lệnh `git worktree add`. Dùng cú pháp `refs/heads/...` như trên để Git không
-nhầm tên branch với tên thư mục.
+Giữ terminal này chạy. Nếu script báo hardware đang chạy, dừng dịch vụ driver
+riêng đang mở LiDAR/republisher trước khi chạy lại; không mở hai driver cùng lúc.
 
-## 3. Build workspace
+### PI 1 — Terminal 2: navigation robot1
 
 ```bash
-cd ~/ur_robot_drawing
-source /opt/ros/humble/setup.bash
-
-rosdep install --ignore-src --from-paths . -r -y
-colcon build --symlink-install
-source install/setup.bash
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  test -f "$HOME/turtlebot4_ws/maps/site.yaml"
+  bash "$HOME/turtlebot4_ws/scripts/robot.sh" robot1 navigation \
+    map:="$HOME/turtlebot4_ws/maps/site.yaml"
+)
 ```
 
-Build riêng package khi phát triển:
+Giữ terminal này chạy, đặt pose robot1 bằng RViz trên laptop.
+
+### PI 2 — Terminal 1: bật hardware robot2
+
+Nếu dịch vụ cũ đã phát đúng topic `/robot2/...`, giữ dịch vụ và bỏ qua
+terminal hardware này.
 
 ```bash
-colcon build --packages-select ur_drawing --symlink-install
-colcon build --packages-select ur_llm_control --symlink-install
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  sudo systemctl stop turtlebot4
+  bash "$HOME/turtlebot4_ws/scripts/robot.sh" robot2 hardware
+)
 ```
 
-Hướng dẫn chạy chi tiết nằm trong README của từng worktree:
+Giữ terminal này chạy.
 
-- `ur_drawing/README.md`
-- `ur_llm_control/README.md`
-
-## 4. Làm việc với từng branch
-
-Mỗi thư mục ứng dụng là một Git worktree độc lập:
+### PI 2 — Terminal 2: navigation robot2
 
 ```bash
-cd ~/ur_robot_drawing/ur_drawing
-git status
-git add -A
-git commit -m "Update drawing"
-
-cd ~/ur_robot_drawing/ur_llm_control
-git status
-git add -A
-git commit -m "Update LLM control"
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  test -f "$HOME/turtlebot4_ws/maps/site.yaml"
+  bash "$HOME/turtlebot4_ws/scripts/robot.sh" robot2 navigation \
+    map:="$HOME/turtlebot4_ws/maps/site.yaml"
+)
 ```
 
-Không checkout `ur_drawing` hoặc `ur_llm_control` trực tiếp trong thư mục main.
-Chuyển branch và commit ngay trong worktree tương ứng.
+Giữ terminal này chạy, đặt pose robot2 bằng RViz trên laptop. Mỗi lệnh navigation
+đã mở map server, AMCL và Nav2; không mở thêm localization riêng.
 
-## 5. Đẩy ba branch lên GitHub
+## C. CHƯA CÓ MAP — quét bằng robot1
 
-Sau khi kiểm tra nội dung local:
+Giữ **PI 1 — Terminal 1: hardware** ở phần B chạy. Nếu navigation robot1 đang
+chạy, nhấn `Ctrl+C` trong terminal navigation trước khi mở mapping.
+
+### PI 1 — Terminal 2: mapping robot1
 
 ```bash
-cd ~/ur_robot_drawing
-git push origin main
-git push -u origin ur_drawing
-git push -u origin ur_llm_control
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  bash "$HOME/turtlebot4_ws/scripts/robot.sh" robot1 mapping
+)
 ```
 
-## Bài 03 — Camera và xử lý zone bị chiếm
+Giữ terminal này chạy. Để robot đứng yên đến khi thấy `Start origin captured`
+và SLAM đăng ký LiDAR. Vị trí/hướng robot lúc đó là gốc map `(0,0,0)`.
 
-Package mới [`ur_llm_camera`](ur_llm_camera/README.md) mở rộng Bài 02 với camera
-RGB, năm block, trạng thái đo từ ảnh và logic chuyển vật cản ra vị trí tạm.
-Package nằm trực tiếp trong workspace; không cần tạo worktree cho package này.
+### PI 1 — Terminal 3: lái robot để quét map
 
 ```bash
-colcon build --packages-select ur_llm_camera --symlink-install
-source install/setup.bash
-ros2 launch ur_llm_camera simulation.launch.py
-# Terminal khác, sau khi export GEMINI_API_KEY:
-ros2 launch ur_llm_camera llm_control.launch.py
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  bash "$HOME/turtlebot4_ws/scripts/robot.sh" robot1 teleop
+)
 ```
+
+`i/,`: tiến/lùi; `j/l`: quay; `k` hoặc Space: dừng; `Ctrl+C`: thoát.
+Mặc định 0,08 m/s và 0,3 rad/s; tự dừng sau 0,6 giây không nhận phím di chuyển.
+
+### PI 1 — Terminal 4: lưu map
+
+Cho robot đứng yên, giữ mapping chạy rồi copy cả khối này:
+
+```bash
+(
+  set -e
+  cd "$HOME/turtlebot4_ws"
+  source /opt/ros/humble/setup.bash
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+  mkdir -p "$HOME/turtlebot4_ws/maps"
+  ros2 run nav2_map_server map_saver_cli -f "$HOME/turtlebot4_ws/maps/site" --ros-args \
+    -r __ns:=/robot1 -r map:=/robot1/map -p save_map_timeout:=15.0
+)
+```
+
+Chép **cả `site.yaml` và `site.pgm`** từ `maps/` của Pi 1 vào
+`$HOME/turtlebot4_ws/maps/` trên Pi 2. Sau đó nhấn `k`, `Ctrl+C` ở teleop,
+`Ctrl+C` ở mapping và chạy các terminal navigation ở phần B. Hai robot dùng
+chung bản đồ; repo chưa ghép map từ hai phiên SLAM.
+
+## D. CÀI ĐẶT MỘT LẦN
+
+### D1. LAPTOP — một terminal cài RViz và build
+
+Laptop cần có ROS 2 Humble tại `/opt/ros/humble`. Khối này tự clone nếu chưa
+có workspace; nếu đã có thì dùng repo hiện tại.
+
+```bash
+(
+  set -e
+  source /opt/ros/humble/setup.bash
+  if [[ ! -d "$HOME/turtlebot4_ws" ]]; then
+    git clone https://github.com/phuwcc/turtlebot4_ws.git "$HOME/turtlebot4_ws"
+  fi
+  cd "$HOME/turtlebot4_ws"
+  sudo apt update
+  sudo apt install -y python3-colcon-common-extensions python3-yaml \
+    ros-humble-rviz2 ros-humble-nav2-bringup ros-humble-navigation2 \
+    ros-humble-slam-toolbox ros-humble-rmw-fastrtps-cpp
+  bash "$HOME/turtlebot4_ws/scripts/build.sh"
+  source "$HOME/turtlebot4_ws/install/setup.bash"
+  ros2 pkg prefix rviz2
+  ros2 pkg prefix tb4_multi_bringup
+)
+```
+
+### D2. LAPTOP — một terminal lưu IP hai Pi
+
+Copy cả khối, nhấn Enter rồi nhập IP khi được hỏi. Chỉ nhập IP lần đầu hoặc khi
+IP thay đổi; các terminal ở phần A tự source file đã lưu. Trên từng Pi, dùng
+`hostname -I` để xem IP, chọn địa chỉ Wi-Fi/LAN mà laptop truy cập được.
+
+<a id="laptop-network"></a>
+
+```bash
+(
+  read -r -p 'IP Wi-Fi/LAN của Pi robot1 (server ID 0): ' tb4_pi1
+  read -r -p 'IP Wi-Fi/LAN của Pi robot2 (server ID 1): ' tb4_pi2
+  if [[ ! "$tb4_pi1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ||
+        ! "$tb4_pi2" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo 'Cần nhập đủ hai địa chỉ IPv4; cấu hình chưa được ghi.' >&2
+    exit 1
+  fi
+  mkdir -p "$HOME/.config/turtlebot4"
+  cat > "$HOME/.config/turtlebot4/pc_env.sh" <<EOF
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+export ROS_DISCOVERY_SERVER='${tb4_pi1}:11811;${tb4_pi2}:11811;'
+export ROS_SUPER_CLIENT=True
+export ROS_LOCALHOST_ONLY=0
+EOF
+)
+```
+
+### D3. MỖI PI — một terminal cài và build
+
+Chạy nguyên khối trên Pi 1, rồi chạy nguyên khối trên Pi 2:
+
+```bash
+(
+  set -e
+  source /opt/ros/humble/setup.bash
+  if [[ ! -d "$HOME/turtlebot4_ws" ]]; then
+    git clone https://github.com/phuwcc/turtlebot4_ws.git "$HOME/turtlebot4_ws"
+  fi
+  cd "$HOME/turtlebot4_ws"
+  sudo apt update
+  sudo apt install -y python3-colcon-common-extensions python3-yaml \
+    ros-humble-turtlebot4-bringup ros-humble-turtlebot4-description \
+    ros-humble-create3-republisher ros-humble-navigation2 \
+    ros-humble-nav2-bringup ros-humble-slam-toolbox
+  bash "$HOME/turtlebot4_ws/scripts/build.sh"
+  source "$HOME/turtlebot4_ws/scripts/env.sh"
+)
+```
+
+Build ngay tại `$HOME/turtlebot4_ws`, không có workspace con `tb4_multi_robot/`.
+Script build dùng một luồng để hạn chế RAM.
+
+### D4. Mạng và định danh robot — thiết lập một lần trước khi chạy
+
+| Cấu hình | Pi 1 | Pi 2 |
+| --- | --- | --- |
+| Namespace | `/robot1` | `/robot2` |
+| ROS domain | `0` | `0` |
+| Discovery server ID | `0` | `1` |
+| Discovery port | `11811` | `11811` |
+| Create 3 namespace | `/robot1/_do_not_use` | `/robot2/_do_not_use` |
+
+Dùng `turtlebot4-setup` trên từng Pi và Apply cấu hình tương ứng cho Create 3
+như [hướng dẫn mạng](docs/NETWORK.md). Chỉ export trong terminal không đổi cấu
+hình dịch vụ/firmware. Laptop và hai Pi phải kết nối được với nhau và đồng bộ
+đồng hồ. Kiểm tra model trong [robot1.yaml](src/tb4_multi_bringup/config/robots/robot1.yaml)
+và [robot2.yaml](src/tb4_multi_bringup/config/robots/robot2.yaml): mặc định `standard`,
+đổi thành `lite` nếu đúng loại robot và build lại.
+
+## E. DỪNG VÀ XỬ LÝ LỖI TRONG ẢNH
+
+- Dừng: hủy goal trên RViz; teleop nhấn `k` rồi `Ctrl+C`; dừng mapping/navigation
+  bằng `Ctrl+C`, sau cùng mới dừng hardware.
+- `package 'rviz2' not found`: chạy phần D1 trên laptop sẽ mở RViz.
+- File môi trường không tồn tại: chạy phần D2 trên laptop, sau đó chạy lại cả
+  khối terminal ở phần A.
+- `Invalid frame ID "odom"`: kiểm tra terminal hardware của Pi tương ứng và
+  publisher odometry bằng LAPTOP — Terminal 3.
+- Scan báo timestamp sớm hơn TF: kiểm tra đồng hồ và dữ liệu TF của các máy.
+  Source môi trường không tạo odometry hoặc sửa thời gian TF.
+
+Chỉ chạy một mapping hoặc navigation cho mỗi robot. Hiện mỗi robot điều hướng
+riêng; chưa có bộ phân công nhiệm vụ/điều phối giao thông. Build và kiểm thử với
+cảm biến giả đã chạy; **chưa xác nhận navigation đồng thời trên hai robot thật**.
+
+- [Hướng dẫn đa robot và kiểm thử](docs/MULTI_ROBOT.md)
+- [Cấu hình mạng Pi / Create 3 / laptop](docs/NETWORK.md)
+- [Kết quả và giới hạn kiểm thử](docs/VALIDATION.md)
+- [Hướng dẫn một robot cũ, không namespace](docs/SINGLE_ROBOT.md)
