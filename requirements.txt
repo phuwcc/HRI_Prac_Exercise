@@ -1,0 +1,4 @@
+# Python 3.10 / ROS 2 Humble; compatible MediaPipe Tasks and NumPy ABI.
+numpy>=1.23,<2
+mediapipe==0.10.21
+opencv-contrib-python==4.11.0.86

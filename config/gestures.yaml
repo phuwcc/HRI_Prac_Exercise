@@ -1,0 +1,17 @@
+gesture_recognition_node:
+  ros__parameters:
+    confidence: 0.65
+    confirm_frames: 5
+    fps: 15.0
+robot_behavior_node:
+  ros__parameters:
+    linear_speed: 0.15
+    angular_speed: 0.5
+    travel_distance: 0.4
+    circle_radius: 0.6
+    greeting_angle: 0.5
+    signal_timeout: 2.0
+    selection_timeout: 10.0
+    sensor_timeout: 1.0
+    stop_distance: 0.4
+    motion_timeout: 120.0

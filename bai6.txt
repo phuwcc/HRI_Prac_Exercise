@@ -1,0 +1,65 @@
+BÀI TẬP 6 – GIAO TIẾP PHI NGÔN NGỮ VÀ ĐIỀU KHIỂN TURTLEBOT 4 BẰNG CỬ CHỈ TAY
+Non-verbal Human–Robot Interaction Using Hand Gesture Recognition
+
+1. Mục tiêu
+Xây dựng hệ thống nhận diện cử chỉ tay thông qua webcam laptop, sử dụng AI để phân loại cử chỉ và điều khiển TurtleBot 4 trong Gazebo thực hiện các hành vi tương ứng thông qua ROS 2.
+
+2. Yêu cầu chuẩn bị
+Ubuntu 22.04 + ROS 2 Humble.
+
+TurtleBot 4 Simulation từ các bài thực hành trước.
+
+Webcam laptop hoặc webcam USB.
+
+Python 3, OpenCV và MediaPipe.
+
+Tài liệu tham khảo:
+
+MediaPipe Gesture Recognizer: https://ai.google.dev/edge/mediapipe/solutions/vision/gesture_recognizerLinks to an external site.
+
+OpenCV: https://docs.opencv.org/Links to an external site.
+
+TurtleBot 4: https://turtlebot.github.io/turtlebot4-user-manual/Links to an external site.
+
+3. Nội dung bài tập
+Phần 1 – Khởi chạy Simulation và Webcam
+Khởi chạy TurtleBot 4 trong môi trường Gazebo.
+
+Kiểm tra robot có thể nhận lệnh vận tốc qua topic /cmd_vel.
+
+Sử dụng OpenCV để đọc và hiển thị hình ảnh từ webcam laptop.
+
+Phần 2 – Nhận diện cử chỉ tay bằng AI
+Viết ROS 2 Node gesture_recognition_node thực hiện:
+
+Đọc hình ảnh từ webcam bằng OpenCV.
+
+Sử dụng MediaPipe Gesture Recognizer để phát hiện và phân loại cử chỉ tay.
+
+Hiển thị tên cử chỉ và độ tin cậy nhận diện trên cửa sổ webcam.
+
+Publish kết quả nhận diện lên topic /detected_gesture (std_msgs/msg/String).
+
+Yêu cầu: Nhận diện tối thiểu 05 cử chỉ tay khác nhau.
+
+Phần 3 – Điều khiển hành vi TurtleBot 4
+Viết ROS 2 Node robot_behavior_node subscribe kết quả nhận diện và điều khiển TurtleBot 4 bằng topic /cmd_vel.
+
+Cử chỉ	Hành vi robot
+Vẫy tay (Wave)	Robot xoay trái–phải để chào lại
+Giơ 1 ngón tay (Pointing Up)	Chọn hành vi tiến–lùi 4 lần
+Giơ 2 ngón tay (Victory)	Chọn hành vi di chuyển theo quỹ đạo tròn
+Giơ ngón cái (Thumbs Up)	Xác nhận và thực hiện hành vi đã chọn
+Xòe bàn tay (Open Palm)	Robot dừng ngay lập tức
+Nắm tay (Closed Fist)	Hủy hành vi hiện tại và trở về trạng thái chờ
+Yêu cầu:
+
+Robot chỉ thực hiện hành vi sau khi nhận được cử chỉ xác nhận.
+
+Không sử dụng bàn phím để điều khiển robot trong quá trình demo.
+
+Có cơ chế tránh nhận diện nhiễu gây kích hoạt lệnh liên tục.
+
+Robot phải dừng khi nhận tín hiệu dừng hoặc khi mất tín hiệu điều khiển.
+
+Các chuyển động phải được thực hiện trong khu vực mô phỏng đủ rộng, không va chạm.
