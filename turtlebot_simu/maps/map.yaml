@@ -1,8 +1,0 @@
-# STARTER MAP ONLY: overwrite map.yaml and map.pgm after running SLAM.
-image: map.pgm
-mode: trinary
-resolution: 0.1
-origin: [-2.0, -2.0, 0.0]
-negate: 0
-occupied_thresh: 0.65
-free_thresh: 0.25
