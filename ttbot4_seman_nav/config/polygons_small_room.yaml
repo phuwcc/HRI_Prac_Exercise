@@ -1,0 +1,15 @@
+# Manual functional regions for the current turtlebot_simu/maps/small_room.pgm
+# Pixel [u,v], origin top-left. Re-draw these polygons after saving a new map.
+regions:
+  - id: A
+    name: Phòng học
+    aliases: [khu vực A, phòng A]
+    polygon: [[62, 72], [120, 72], [120, 122], [62, 122]]
+  - id: B
+    name: Phòng thí nghiệm
+    aliases: [khu vực B, phòng B, phòng lab]
+    polygon: [[140, 66], [176, 66], [176, 122], [140, 122]]
+  - id: C
+    name: Hành lang
+    aliases: [khu vực C, hành lang C]
+    polygon: [[62, 12], [125, 12], [125, 65], [62, 65]]

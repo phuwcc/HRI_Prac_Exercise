@@ -1,0 +1,44 @@
+BÀI THỰC HÀNH 7
+Phân vùng bản đồ và điều hướng robot bằng giọng nói
+Thời gian thực hiện: 01 tuần
+Môi trường: Ubuntu 22.04, ROS 2 Humble, TurtleBot 4 Simulation.
+
+1. Yêu cầu
+Xây dựng hệ thống cho phép robot nhận biết các khu vực trên bản đồ đã tạo và thực hiện điều hướng thông qua câu lệnh giọng nói.
+
+Phân vùng bản đồ (Map Segmentation): Xử lý bản đồ 2D Occupancy Grid để phân chia thành các khu vực riêng biệt như phòng, hành lang hoặc không gian chức năng.
+
+Gắn nhãn khu vực (Semantic Mapping): Đánh dấu các khu vực A, B, C... hoặc sử dụng tên có ý nghĩa như Phòng học, Phòng thí nghiệm, Hành lang. Xác định tọa độ đích hợp lệ cho từng khu vực.
+
+Nhận dạng giọng nói (Speech Recognition): Xây dựng chương trình tiếp nhận và chuyển đổi câu lệnh giọng nói thành văn bản.
+
+Điều hướng bằng giọng nói (Voice Navigation): Phân tích câu lệnh, xác định khu vực cần đến và gửi yêu cầu điều hướng cho Nav2.
+
+Ví dụ các câu lệnh:
+
+"Đi đến khu vực A."
+
+"Di chuyển từ khu vực A đến khu vực B."
+
+"Đi đến phòng thí nghiệm."
+
+2. Gợi ý triển khai
+Sử dụng OpenCV để xử lý ảnh bản đồ .pgm, thử nghiệm thresholding, morphology, watershed hoặc phương pháp phân vùng phù hợp. Có thể bắt đầu bằng việc vẽ thủ công các vùng trên bản đồ trước khi tự động hóa.
+
+Lưu thông tin từng vùng dưới dạng JSON/YAML gồm tên, ID, tọa độ tâm hoặc điểm đích hợp lệ. Sử dụng map.yaml để chuyển tọa độ pixel sang tọa độ thực trong bản đồ ROS.
+
+Sử dụng Whisper hoặc Vosk để nhận dạng giọng nói, sau đó trích xuất tên khu vực xuất phát và đích đến.
+
+Xây dựng ROS 2 node chuyển câu lệnh thành mục tiêu NavigateToPose của Nav2. Nếu yêu cầu đi từ A đến B khi robot đang ở vị trí khác, cần điều hướng qua A trước khi đến B.
+
+3. Kết quả cần đạt
+Bản đồ được phân chia và hiển thị trực quan tối thiểu 3 khu vực có nhãn.
+
+Robot nhận diện được tối thiểu 3 câu lệnh điều hướng bằng giọng nói.
+
+Robot tự động di chuyển đến đúng khu vực được yêu cầu, tránh vật cản bằng Nav2.
+
+Hệ thống xử lý được trường hợp câu lệnh chứa khu vực không tồn tại.
+
+4. Gợi ý mở rộng
+Cho phép robot nhận lệnh nhiều điểm đến, ví dụ: "Đi từ phòng A qua hành lang C rồi đến phòng B", đồng thời hiển thị các khu vực và đường đi dự kiến trên RViz hoặc giao diện bản đồ riêng.
