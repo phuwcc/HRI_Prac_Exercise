@@ -8,9 +8,11 @@ import pytest
 rclpy = pytest.importorskip('rclpy')
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
-from rclpy.action import ActionServer
+from rclpy.action import ActionServer, CancelResponse
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.task import Future
+from rosgraph_msgs.msg import Clock
 from std_msgs.msg import String
 import yaml
 
@@ -19,7 +21,7 @@ from test_semantic import make_map
 
 
 @pytest.fixture
-def ros_system(tmp_path):
+def ros_system(tmp_path, request):
     path = make_map(tmp_path)
     config = {'map': str(path), 'frame_id': 'map', 'clearance': .3, 'regions': [
         {'id': 'A', 'name': 'Phòng học', 'goal': {'x': .5, 'y': .5, 'yaw': 0.}},
@@ -28,20 +30,32 @@ def ros_system(tmp_path):
     ]}
     regions = tmp_path/'regions.yaml'
     regions.write_text(yaml.safe_dump(config, allow_unicode=True))
-    rclpy.init(args=['--ros-args', '-p', f'regions_file:={regions}'])
+    args = ['--ros-args', '-p', f'regions_file:={regions}']
+    for key, value in getattr(request, 'param', {}).items():
+        args += ['-p', f'{key}:={str(value).lower()}']
+    rclpy.init(args=args)
     server_node = Node('test_nav2')
     received = []
-    behavior = {'abort': False}
+    behavior = {'abort': False, 'hold': False, 'release': Future(), 'cancels': 0}
 
-    def execute(handle):
+    async def execute(handle):
         received.append(handle.request.pose.pose.position.x)
-        if behavior['abort']:
+        if behavior['hold']:
+            await behavior['release']
+        if handle.is_cancel_requested:
+            handle.canceled()
+        elif behavior['abort']:
             handle.abort()
         else:
             handle.succeed()
         return NavigateToPose.Result()
 
-    server = ActionServer(server_node, NavigateToPose, 'navigate_to_pose', execute)
+    def cancel(_handle):
+        behavior['cancels'] += 1
+        return CancelResponse.ACCEPT
+
+    server = ActionServer(server_node, NavigateToPose, 'navigate_to_pose', execute,
+                          cancel_callback=cancel)
     node = VoiceNavigation()
     msg = OccupancyGrid()
     msg.header.frame_id = 'map'
@@ -104,3 +118,34 @@ def test_cancel_before_acceptance_does_not_advance(ros_system):
     spin_done(node, executor)
     assert received == [.5]
     assert node.route == []
+
+
+@pytest.mark.parametrize('ros_system', [
+    {'use_sim_time': True, 'goal_timeout': .1},
+], indirect=True)
+@pytest.mark.parametrize('paused_clock', [False, True])
+def test_timeout_cancels_goal_without_advancing_sim_time(ros_system, paused_clock):
+    node, executor, received, behavior = ros_system
+    behavior['hold'] = True
+    if paused_clock:
+        publisher = node.create_publisher(Clock, '/clock', 10)
+        message = Clock()
+        message.clock.sec = 10
+        end = time.monotonic()+2
+        while node.get_clock().now().nanoseconds == 0 and time.monotonic() < end:
+            publisher.publish(message)
+            executor.spin_once(timeout_sec=.05)
+        assert node.get_clock().now().nanoseconds == 10_000_000_000
+    node.on_command(String(data='Đi từ A đến B'))
+    end = time.monotonic()+3
+    while behavior['cancels'] == 0 and time.monotonic() < end:
+        executor.spin_once(timeout_sec=.05)
+    try:
+        assert received == [.5]
+        assert behavior['cancels'] == 1
+        assert node.cancel_requested
+        assert node.route == []
+    finally:
+        behavior['release'].set_result(None)
+        spin_done(node, executor)
+    assert received == [.5]

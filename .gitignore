@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.compat/
+# Shared worktree excludes must not hide new source modules on this branch.
+!/ttbot4_seman_nav/

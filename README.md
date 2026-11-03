@@ -12,12 +12,17 @@ Chạy từ thư mục workspace `~/ur_robot_drawing`:
 cd ~/ur_robot_drawing
 source ttbot4_seman_nav/scripts/activate_hri.bash
 python --version  # phải là Python 3.10 để dùng rclpy của Humble
+# Launch mặc định chạy Whisper trên CPU; không cần tải các thư viện CUDA.
+python -m pip install --upgrade torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r ttbot4_seman_nav/requirements.txt
 sudo apt update
-sudo apt install libportaudio2 ffmpeg ros-humble-rmw-cyclonedds-cpp
+sudo apt install libportaudio2 ffmpeg git cmake build-essential ros-humble-rmw-cyclonedds-cpp
 # Nếu PortAudio của hệ thống không có hoặc sounddevice không tìm được:
 conda install -n hri -c conda-forge portaudio -y
 rosdep install --from-paths turtlebot_simu ttbot4_seman_nav --ignore-src -r -y
+# Build overlay TF2 tương thích, không thay đổi ROS hệ thống (cần git/cmake/g++).
+bash ttbot4_seman_nav/scripts/setup_tf2_compat.bash
+source ttbot4_seman_nav/scripts/activate_hri.bash
 python -m colcon --log-base log_seman build --build-base build_seman \
   --install-base install_seman --packages-select turtlebot_simu ttbot4_seman_nav --symlink-install
 source install_seman/setup.bash
@@ -28,6 +33,19 @@ Nếu thiếu simulator/Nav2, cài các dependency theo README của
 Script kích hoạt source Conda, ROS, workspace, đặt cùng Cyclone DDS cho các
 terminal. Các lệnh build và cài thư viện chạy bằng Python của `hri`.
 Không chạy package bằng Python 3.11/3.12.
+
+Script kích hoạt đặt `PYTHONNOUSERSITE=1` để thư viện trong `~/.local` không
+ghi đè OpenCV/Torch của `hri`. Nếu thiếu thư viện sau khi kích hoạt, cài lại
+requirements trong môi trường này.
+
+Humble TF2 0.25.21–0.25.23 có báo cáo deadlock khi MessageFilter chờ TF:
+AMCL/costmap có thể ngừng nhận TF dù `/tf` vẫn đang cập nhật
+([upstream #995](https://github.com/ros2/geometry2/issues/995)). Script
+`setup_tf2_compat.bash` build `tf2` và `tf2_ros` 0.25.20 tại commit cố định,
+lưu trong `.compat/tf2`, được bỏ qua bởi Git/colcon và source sau cùng khi
+kích hoạt. Launch từ chối các phiên bản đã biết bị ảnh hưởng và hướng dẫn
+build/source overlay trước khi mở Gazebo. Khi chuyển workspace, build lại
+overlay thay vì sao chép `.compat`.
 
 ## 2. Phân vùng và đặt tên
 
@@ -101,6 +119,13 @@ laser khớp tường. Nếu map có gốc khác, truyền `initial_x`, `initial
 `initial_yaw` hoặc `auto_initial_pose:=false` để đặt pose thủ công.
 Đảm bảo **world đúng với map**, không chỉ dựa vào tên file `small_room`.
 
+Launch mặc định thêm footprint dock thấp vào một bản đồ tạm vì LiDAR không
+nhìn thấy dock; Nav2 sẽ lập đường vòng thay vì đâm dock khi đi B → C. Vị trí
+dock được suy ra từ `initial_x/y/yaw` của robot lúc spawn, theo mô hình dock
+chuẩn của TurtleBot 4. Đặt các giá trị này đúng ngay cả khi dùng pose thủ công.
+Bản đồ SLAM gốc không bị sửa; file tạm được dọn khi tắt launch. Dùng
+`dock_keepout:=false` nếu dùng một simulator có bố trí dock khác.
+
 Terminal 2, undock trước khi gửi lệnh:
 
 ```bash
@@ -133,6 +158,9 @@ vụ, lệnh mới bị từ chối; hãy hủy và đợi kết quả hủy r�
 bị từ chối hoặc quá 180 giây sẽ dừng các điểm còn lại. Nav2 đảm nhiệm tránh
 vật cản và lập đường; metadata map và khoảng trống tại đích được kiểm tra
 lại trên `/map` đang chạy trước mỗi goal.
+Watchdog timeout chạy bằng đồng hồ monotonic riêng, vẫn gửi yêu cầu hủy
+khi Gazebo pause hoặc mất `/clock`; nó chờ Nav2 xác nhận dừng trước khi
+cho nhận nhiệm vụ mới.
 
 Đọc trạng thái:
 
@@ -193,7 +221,17 @@ Unit test kiểm tra câu lệnh tiếng Việt, nhiều điểm, vùng không t
 chuyển tọa độ với map xoay, tránh unknown/tường, phân vùng tự động và thủ công.
 Kiểm thử ROS dùng action server Nav2 giả lập để xác minh thứ tự đích, hủy
 trước khi chấp nhận goal, dừng sau abort và từ chối map không khớp.
+Kiểm thử còn xác minh timeout/cancel khi `/clock` không đến hoặc đã pause,
+và từ chối runtime TF2 có lỗi đã biết.
+Kiểm tra bản đồ tạm có dock với origin/yaw khác nhau, giữ nguyên dữ liệu
+SLAM gốc và không cho map khởi tạo vượt qua bước kiểm tra launch.
 Khóa pytest dưới phiên bản 9 để tương thích plugin launch_testing của Humble.
 Chạy nghiệm thu Gazebo/micro vẫn cần xác nhận riêng: ít nhất ba vùng có nhãn,
 ba câu giọng nói điều khiển đúng, A → B đúng thứ tự, tránh vật cản và từ chối Z.
 Không xem kết quả build/unit test là bằng chứng robot đã chạy thành công.
+
+Kiểm tra ngày 03/11/2026: build thành công, 28 test qua; Gazebo/Nav2 thực
+hiện thành công ba câu mẫu qua topic văn bản và lệnh đến C, từ chối Z.
+Sai số đích đo được 0.14–0.21 m. Micro/Whisper thu liên tục nhiều lượt;
+chưa nghiệm thu độ chính xác ba câu nói thực tế. Khi thoát launch,
+Gazebo/Nav2 đôi lúc vẫn cần SIGTERM/SIGKILL; lỗi shutdown này chưa xử lý.

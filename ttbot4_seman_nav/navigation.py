@@ -7,6 +7,7 @@ from action_msgs.msg import GoalStatus
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
 from rclpy.action import ActionClient
+from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -41,7 +42,10 @@ class VoiceNavigation(Node):
         self.cancel_requested = False
         self.deadline = 0
         self.live_map = None
-        self.create_timer(.5, self.tick)
+        # Goal deadlines use monotonic time, so the watchdog must keep running
+        # when Gazebo is paused or /clock stops arriving.
+        self.watchdog_clock = Clock(clock_type=ClockType.STEADY_TIME)
+        self.create_timer(.5, self.tick, clock=self.watchdog_clock)
         self.create_timer(2.0, self.publish_markers)
         self.report('Sẵn sàng nhận câu lệnh; chờ map/Nav2. Undock và định vị trước khi chạy.')
 
