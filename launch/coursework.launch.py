@@ -56,14 +56,18 @@ def start(context):
     ), Node(
         package='ttbot4_seman_nav', executable='speech_recognition', output='screen',
         condition=IfCondition(LaunchConfiguration('speech')),
-        parameters=[{'model': LaunchConfiguration('whisper_model'), 'device': 'cpu'}],
+        parameters=[{
+            'model': LaunchConfiguration('whisper_model'), 'device': 'cpu',
+            'language': 'en', 'microphone': LaunchConfiguration('microphone'),
+        }],
     )]
 
 
 def generate_launch_description():
     arguments = [DeclareLaunchArgument('regions', description='Absolute path to generated regions.yaml')]
     for name, default in {
-        'navigation': 'true', 'speech': 'true', 'whisper_model': 'base',
+        'navigation': 'true', 'speech': 'true', 'whisper_model': 'base.en',
+        'microphone': '',
         'dock_keepout': 'true',
         'world': 'small_room', 'headless': 'true', 'rviz': 'true',
         'auto_initial_pose': 'true', 'initial_x': '0.0', 'initial_y': '0.0', 'initial_yaw': '0.0',

@@ -134,24 +134,35 @@ source ttbot4_seman_nav/scripts/activate_hri.bash
 ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
 ```
 
-Đợi `SUCCEEDED`. Khi node báo **Micro sẵn sàng**, nói trong lượt thu 5 giây,
-chờ Whisper xử lý rồi mới nói lệnh tiếp theo. Whisper mặc định `base`, tiếng
-Việt, CPU; lần đầu cần Internet để tải model. Có thể dùng `whisper_model:=small`
-để tăng chất lượng nhưng thời gian xử lý lâu hơn. Bản multilingual được dùng,
-không dùng model hậu tố `.en` cho tiếng Việt.
+Đợi `SUCCEEDED`. Khi model đã tải xong, giữ im lặng khoảng 0,6 giây để đo
+nhiễu nền. Chờ log **Listening**, rồi nói tiếng Anh tự nhiên. Không cần căn
+lượt thu 5 giây: micro nghe liên tục, giữ sẵn 0,3 giây trước khi phát hiện
+giọng nói để tránh mất đầu từ; khoảng im lặng 0,8 giây kết thúc câu.
+Micro vẫn thu khi Whisper đang xử lý. Nên đợi kết quả và nhiệm vụ hiện tại
+hoàn thành trước khi gửi lệnh tiếp theo.
 
-Ba câu lệnh cần nghiệm thu:
+Mặc định dùng Whisper `base.en`, tiếng Anh, CPU; lần đầu cần Internet để tải
+model. Có thể dùng `whisper_model:=small.en` để thử model lớn hơn hoặc
+`whisper_model:=tiny.en` nếu CPU xử lý chậm. Khả năng nhận diện thực tế cần
+kiểm tra với micro và tiếng ồn tại chỗ.
 
-1. “Đi đến khu vực A.”
-2. “Di chuyển từ khu vực A đến khu vực B.”
-3. “Đi đến phòng thí nghiệm.”
+Các câu lệnh:
 
-Mở rộng: “Đi từ phòng A qua hành lang C rồi đến phòng B”. Node giữ thứ tự
-A → C → B và chỉ chuyển đích khi goal trước thành công. Kể cả robot đang ở
-nơi khác, lệnh từ A đến B luôn gửi A trước B. Nhận cả văn bản không dấu.
-“Nói dừng lại”/“hủy điều hướng” gửi yêu cầu cancel tới Nav2. Việc nhận giọng
-nói theo từng đoạn và thời gian suy luận có độ trễ; nút dừng của simulator
-vẫn cần dùng khi muốn dừng ngay.
+1. “Go to area A.” hoặc “Go to the classroom.”
+2. “Go from area A to area B.”
+3. “Go to the laboratory.” hoặc “Go to the lab.”
+4. “Go from room A via the corridor then to room B.”
+5. “Stop.” hoặc “Cancel navigation.”
+
+Node giữ thứ tự A → C → B và chỉ chuyển đích khi goal trước thành công.
+Kể cả robot đang ở nơi khác, lệnh từ A đến B luôn gửi A trước B. Tên vùng
+mặc định: A = Classroom, B = Laboratory, C = Corridor; nhận cả `area`,
+`room`, `region`, `zone` kèm ID. Alias tiếng Việt vẫn dùng được khi gửi
+văn bản trực tiếp. Nếu dùng file vùng tự sinh, thêm tên/alias tiếng Anh
+cho đúng vùng trong YAML trước khi gọi theo tên.
+
+“Stop” gửi yêu cầu cancel tới Nav2 sau khi nhận diện. Thu và suy luận vẫn
+có độ trễ; dùng nút dừng simulator khi cần dừng ngay.
 
 Lệnh chứa bất kỳ vùng không tồn tại sẽ bị từ chối toàn bộ. Khi đang có nhiệm
 vụ, lệnh mới bị từ chối; hãy hủy và đợi kết quả hủy rồi gửi lại. Goal lỗi,
@@ -183,11 +194,11 @@ ros2 launch ttbot4_seman_nav coursework.launch.py \
 Trong terminal đã kích hoạt `hri`:
 
 ```bash
-ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Đi đến khu vực A.'}"
-ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Di chuyển từ khu vực A đến khu vực B.'}"
-ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Đi đến phòng thí nghiệm.'}"
-ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Đi đến khu vực Z.'}"
-ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Dừng lại'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go to area A.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go from area A to area B.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go to the laboratory.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go to area Z.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Stop'}"
 ```
 
 Gửi từng câu khi nhiệm vụ trước đã hoàn thành. Câu chứa Z phải báo từ chối,
@@ -199,13 +210,29 @@ Chọn micro hoặc GPU bằng cách chạy node giọng nói riêng, tắt `spe
 ```bash
 python -c 'import sounddevice as sd; print(sd.query_devices())'
 ros2 run ttbot4_seman_nav speech_recognition --ros-args \
-  -p microphone:="USB Audio" -p model:=base -p device:=cpu
+  -p microphone:="USB Audio" -p model:=base.en -p language:=en -p device:=cpu
 ```
 
 Nếu import `rclpy` lỗi, kiểm tra `which python`, phiên bản 3.10 và đã source
 ROS. Nếu PortAudio không có thiết bị, kiểm tra micro của Ubuntu/VM và chọn
-đúng thiết bị. Model cần tải thành công trước khi bắt đầu thu. Ngưỡng im lặng
-`min_rms` mặc định 0.008 giúp hạn chế Whisper suy diễn khi không có lời nói.
+đúng thiết bị. Model cần tải thành công trước khi bắt đầu thu. Node dùng sample rate gốc
+của micro rồi chuyển về 16 kHz cho Whisper. Có thể chọn micro trực tiếp khi
+launch bằng `microphone:="USB Audio"` hoặc chỉ số thiết bị (dạng chuỗi).
+
+Các tham số node để chỉnh thu:
+
+- `min_rms` mặc định 0.006: ngưỡng năng lượng tối thiểu. Nếu giọng nhỏ chưa
+  được bắt, thử 0.003; nếu thu cả tiếng động, tăng lên 0.01. Ngưỡng thực tế
+  còn được nâng theo nhiễu nền đo lúc khởi động.
+- `silence_seconds` mặc định 0.8: tăng lên 1.2 nếu hay ngắt giữa câu.
+- `pre_roll_seconds` mặc định 0.3: giữ phần đầu trước khi phát hiện giọng.
+- `min_speech_seconds` mặc định 0.24: bỏ tiếng click/đoạn quá ngắn.
+- `record_seconds` mặc định 8.0: giới hạn tối đa một câu, không phải chu kỳ thu.
+- `calibration_seconds` mặc định 0.6: giữ im lặng khi đo nhiễu nền.
+
+Hàng đợi chứa tối đa hai câu trong lúc xử lý; nếu đầy, node báo câu bị bỏ
+qua để bạn nói lại. Cơ chế năng lượng có thể bắt cả tiếng quạt lớn hoặc
+người khác nói; nên dùng micro gần miệng và điều chỉnh ngưỡng ở môi trường thật.
 
 ## 5. Kiểm thử và giới hạn xác minh
 
@@ -217,7 +244,8 @@ ROS_DOMAIN_ID=86 python -m colcon --log-base log_seman test --build-base build_s
 python -m colcon test-result --test-result-base build_seman --verbose
 ```
 
-Unit test kiểm tra câu lệnh tiếng Việt, nhiều điểm, vùng không tồn tại,
+Unit test kiểm tra câu lệnh tiếng Anh/Việt, bắt đầu/kết thúc câu nói, nhiễu nền,
+giới hạn thời gian thu, chuyển sample rate, nhiều điểm, vùng không tồn tại,
 chuyển tọa độ với map xoay, tránh unknown/tường, phân vùng tự động và thủ công.
 Kiểm thử ROS dùng action server Nav2 giả lập để xác minh thứ tự đích, hủy
 trước khi chấp nhận goal, dừng sau abort và từ chối map không khớp.

@@ -2,7 +2,7 @@
 <package format="3">
   <name>ttbot4_seman_nav</name>
   <version>1.0.0</version>
-  <description>Map segmentation, semantic labels and Vietnamese voice navigation.</description>
+  <description>Map segmentation, semantic labels and English voice navigation.</description>
   <maintainer email="student@example.com">Student</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>

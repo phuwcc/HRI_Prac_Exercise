@@ -12,7 +12,7 @@ setup(
     ],
     install_requires=['setuptools'], extras_require={'test': ['pytest>=7,<9']}, zip_safe=True,
     maintainer='Student', maintainer_email='student@example.com',
-    description='Semantic map segmentation and Vietnamese voice navigation for TurtleBot 4.',
+    description='Semantic map segmentation and English voice navigation for TurtleBot 4.',
     license='Apache-2.0',
     entry_points={'console_scripts': [
         'segment_map = ttbot4_seman_nav.segmentation:main',
