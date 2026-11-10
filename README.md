@@ -37,6 +37,8 @@ lần đầu cần tải model. Ví dụ chọn micro/model khác:
 
 Chế độ này vẫn chạy Gazebo, RViz, AMCL và Nav2; gửi lệnh văn bản ở bước 4.
 Chỉ mở **một** chế độ; dừng bằng `Ctrl+C` trước khi đổi chế độ.
+Script từ chối mở thêm một phiên trên cùng ROS domain. Mỗi launch tạo kênh
+Gazebo riêng để tránh nối nhầm vào simulator cũ còn sót sau khi thoát.
 
 ## 3. Undock — Terminal 2
 
@@ -48,6 +50,9 @@ Chờ **Managed nodes are active** của Nav2 rồi chạy:
 
 Chờ **SUCCEEDED** trước khi gửi lệnh. RViz mặc định mở sau khi localization
 sẵn sàng. Đặt pose thủ công bằng `auto_initial_pose:=false` nếu cần.
+Nếu log còn `scan=False`, `odom_tf=0` hoặc `Requesting list of world names`,
+robot chưa sẵn sàng: chưa gửi undock hay lệnh đi. `Robot already undocked`
+chỉ là lý do từ chối undock, không chứng minh Nav2 đã hoạt động.
 
 ## 4. Các lệnh kiểm tra có sẵn — Terminal 2
 

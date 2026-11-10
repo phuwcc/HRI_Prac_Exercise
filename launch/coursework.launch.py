@@ -1,11 +1,12 @@
 """Reuse the workspace simulator/Nav2, adding semantic navigation and speech."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import uuid4
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction,
-                            RegisterEventHandler)
+                            RegisterEventHandler, SetEnvironmentVariable)
 from launch.event_handlers import OnShutdown
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -18,12 +19,26 @@ from ttbot4_seman_nav.navigation_map import write_navigation_map
 from ttbot4_seman_nav.runtime import validate_tf2_runtime
 
 
+def simulator_environment():
+    """Give the world, spawn clients and bridges one fresh Transport partition.
+
+    Gazebo can survive a launch shutdown. Reusing its discovery partition may
+    connect create/clock bridges to the old server instead of the new world.
+    ROS-only clients (command/status/undock) do not need this partition.
+    """
+    partition = 'semantic_nav_' + uuid4().hex
+    return [SetEnvironmentVariable(name, partition)
+            for name in ('IGN_PARTITION', 'GZ_PARTITION')]
+
+
 def start(context):
     regions = LaunchConfiguration('regions').perform(context)
     data, grid = load_regions(regions)
     cleanup = []
+    environment = []
     if IfCondition(LaunchConfiguration('navigation')).evaluate(context):
         validate_tf2_runtime()
+        environment = simulator_environment()
         if IfCondition(LaunchConfiguration('dock_keepout')).evaluate(context):
             temporary = TemporaryDirectory(prefix='semantic_nav_map_')
             grid = write_navigation_map(grid, temporary.name, *(
@@ -51,7 +66,7 @@ def start(context):
                 'initial_x', 'initial_y', 'initial_yaw')},
         }.items(),
     )
-    return [*cleanup, nav, Node(
+    return [*environment, *cleanup, nav, Node(
         package='ttbot4_seman_nav', executable='voice_navigation', output='screen',
         parameters=[{'regions_file': regions, 'use_sim_time': True}],
     ), Node(

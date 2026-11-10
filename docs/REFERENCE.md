@@ -2,6 +2,21 @@
 
 Hướng dẫn chạy hằng ngày: [README](../README.md).
 
+## Gazebo cũ còn chạy sau khi thoát
+
+Khi có nhiều server dùng chung Gazebo Transport partition, có thể gặp
+`additional publishers on /clock`, `Requesting list of world names`,
+`scan=False`, `odom_tf=0` và timeout `/controller_manager/list_controllers`.
+Nav2 chưa sẵn sàng trong trạng thái này; thay goal hoặc gửi lại undock
+không giải quyết được việc robot chưa spawn.
+
+Launch bài 7 tạo `IGN_PARTITION`/`GZ_PARTITION` mới cho mỗi lần mở simulator,
+dùng chung cho world, spawn clients và bridges trong phiên đó. Các script
+chặn mở đồng thời hai phiên trên cùng ROS domain. Khi `navigation:=false`,
+launch không đổi partition của simulator đang chạy sẵn. Terminal gửi
+command/status/undock chỉ dùng ROS, không cần biết partition Gazebo.
+Xem [Gazebo Transport partition](https://staging.gazebosim.org/api/transport/12/envvars.html).
+
 Package ROS 2 Humble `ttbot4_seman_nav`, dùng **Conda `hri` (Python 3.10)**.
 Mô phỏng, AMCL và Nav2 được dùng lại từ package `turtlebot_simu` trong workspace.
 Không cần sao chép hoặc sửa mã của các bài trước.

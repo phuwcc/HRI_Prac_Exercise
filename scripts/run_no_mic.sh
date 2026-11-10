@@ -6,5 +6,4 @@ if [[ "${1:-}" == --help ]]; then
     exit 0
 fi
 activate_project
-exec ros2 launch ttbot4_seman_nav coursework.launch.py \
-    "regions:=$seman_repo_dir/config/regions_small_room.yaml" speech:=false "$@"
+run_coursework speech:=false "$@"
