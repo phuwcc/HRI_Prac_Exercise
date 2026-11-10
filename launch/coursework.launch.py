@@ -11,6 +11,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 from ttbot4_seman_nav.map_data import load_regions
 from ttbot4_seman_nav.navigation_map import write_navigation_map
@@ -58,7 +59,8 @@ def start(context):
         condition=IfCondition(LaunchConfiguration('speech')),
         parameters=[{
             'model': LaunchConfiguration('whisper_model'), 'device': 'cpu',
-            'language': 'en', 'microphone': LaunchConfiguration('microphone'),
+            'language': 'en',
+            'microphone': ParameterValue(LaunchConfiguration('microphone'), value_type=str),
         }],
     )]
 

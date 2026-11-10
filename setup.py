@@ -9,6 +9,7 @@ setup(
         ('share/ttbot4_seman_nav', ['package.xml', 'README.md']),
         ('share/ttbot4_seman_nav/launch', glob('launch/*.launch.py')),
         ('share/ttbot4_seman_nav/config', glob('config/*')),
+        ('share/ttbot4_seman_nav/docs', glob('docs/*.md')),
     ],
     install_requires=['setuptools'], extras_require={'test': ['pytest>=7,<9']}, zip_safe=True,
     maintainer='Student', maintainer_email='student@example.com',

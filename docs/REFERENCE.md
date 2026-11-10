@@ -1,0 +1,267 @@
+# Tham khảo — Cài đặt, phân vùng và cấu hình
+
+Hướng dẫn chạy hằng ngày: [README](../README.md).
+
+Package ROS 2 Humble `ttbot4_seman_nav`, dùng **Conda `hri` (Python 3.10)**.
+Mô phỏng, AMCL và Nav2 được dùng lại từ package `turtlebot_simu` trong workspace.
+Không cần sao chép hoặc sửa mã của các bài trước.
+
+## 1. Chuẩn bị và build
+
+Chạy từ thư mục workspace `~/ur_robot_drawing`:
+
+```bash
+cd ~/ur_robot_drawing
+source ttbot4_seman_nav/scripts/activate_hri.bash
+python --version  # phải là Python 3.10 để dùng rclpy của Humble
+# Launch mặc định chạy Whisper trên CPU; không cần tải các thư viện CUDA.
+python -m pip install --upgrade torch --index-url https://download.pytorch.org/whl/cpu
+python -m pip install -r ttbot4_seman_nav/requirements.txt
+sudo apt update
+sudo apt install libportaudio2 ffmpeg git cmake build-essential ros-humble-rmw-cyclonedds-cpp
+# Nếu PortAudio của hệ thống không có hoặc sounddevice không tìm được:
+conda install -n hri -c conda-forge portaudio -y
+rosdep install --from-paths turtlebot_simu ttbot4_seman_nav --ignore-src -r -y
+# Build overlay TF2 tương thích, không thay đổi ROS hệ thống (cần git/cmake/g++).
+bash ttbot4_seman_nav/scripts/setup_tf2_compat.bash
+source ttbot4_seman_nav/scripts/activate_hri.bash
+python -m colcon --log-base log_seman build --build-base build_seman \
+  --install-base install_seman --packages-select turtlebot_simu ttbot4_seman_nav --symlink-install
+source install_seman/setup.bash
+```
+
+Nếu thiếu simulator/Nav2, cài các dependency theo README của
+[`turtlebot_simu`](../../turtlebot_simu/README.md).
+Script kích hoạt source Conda, ROS, workspace, đặt cùng Cyclone DDS cho các
+terminal. Các lệnh build và cài thư viện chạy bằng Python của `hri`.
+Không chạy package bằng Python 3.11/3.12.
+
+Script kích hoạt đặt `PYTHONNOUSERSITE=1` để thư viện trong `~/.local` không
+ghi đè OpenCV/Torch của `hri`. Nếu thiếu thư viện sau khi kích hoạt, cài lại
+requirements trong môi trường này.
+
+Humble TF2 0.25.21–0.25.23 có báo cáo deadlock khi MessageFilter chờ TF:
+AMCL/costmap có thể ngừng nhận TF dù `/tf` vẫn đang cập nhật
+([upstream #995](https://github.com/ros2/geometry2/issues/995)). Script
+`setup_tf2_compat.bash` build `tf2` và `tf2_ros` 0.25.20 tại commit cố định,
+lưu trong `.compat/tf2`, được bỏ qua bởi Git/colcon và source sau cùng khi
+kích hoạt. Launch từ chối các phiên bản đã biết bị ảnh hưởng và hướng dẫn
+build/source overlay trước khi mở Gazebo. Khi chuyển workspace, build lại
+overlay thay vì sao chép `.compat`.
+
+## 2. Phân vùng và đặt tên
+
+Phải có map đã lưu từ SLAM, đúng với world sẽ chạy. Đọc hướng dẫn quét/lưu
+map trong `turtlebot_simu`. Không dùng map khởi tạo hoặc map của world khác.
+
+### Cách thủ công: ba khu vực chức năng A, B, C
+
+File `config/polygons_small_room.yaml` minh họa ba đa giác trên ảnh
+`small_room.pgm` hiện có trong repository. Đây là nhãn chức năng do người dùng
+đặt, không phải kết quả xác định loại phòng tự động. Sau khi quét lại map, sửa
+các đỉnh đa giác theo ảnh mới trước khi chạy:
+
+```bash
+source ttbot4_seman_nav/scripts/activate_hri.bash
+ros2 run ttbot4_seman_nav segment_map \
+  --map "$PWD/turtlebot_simu/maps/small_room.yaml" \
+  --polygons "$PWD/ttbot4_seman_nav/config/polygons_small_room.yaml" \
+  --output "$PWD/ttbot4_seman_nav/config/regions_small_room.yaml"
+```
+
+`polygon: [[u,v], ...]` dùng pixel, gốc trên trái, `u` sang phải, `v` xuống dưới.
+Có thể mở ảnh bằng trình sửa ảnh để đọc tọa độ. Mỗi vùng cần ít nhất ba đỉnh,
+không chồng lên nhau và có vùng trống đủ rộng. Các đốm free rời rạc rất nhỏ
+được bỏ qua; đa giác phủ nhiều vùng trống tách biệt đáng kể sẽ bị từ chối.
+Tên và `aliases` có thể sửa trong YAML đa giác, sau đó chạy lại phân vùng.
+
+Chương trình tạo:
+
+- `regions_small_room.yaml`: ID, tên, alias, điểm đích trong frame `map`.
+- `regions_small_room.png`: bản đồ màu có ID và điểm đích đỏ.
+- `regions_small_room.labels.npy`: ma trận nhãn pixel; 0 là không được gắn nhãn.
+
+Điểm đích tự chọn trong vùng trống, mặc định cách tường/unknown ít nhất 0.30 m.
+Chuyển pixel sang mét có xét resolution, origin, yaw và đảo trục dọc của ảnh.
+YAML xuất ra lưu đường dẫn tới map tương đối với file vùng để giữ được khi chuyển workspace.
+
+### Cách tự động
+
+```bash
+ros2 run ttbot4_seman_nav segment_map \
+  --map "$PWD/turtlebot_simu/maps/small_room.yaml" \
+  --output "$PWD/ttbot4_seman_nav/config/regions_auto.yaml" \
+  --doorway-width 0.8 --min-area 0.5 --clearance 0.30
+```
+
+Thuật toán dùng occupancy threshold, distance transform để tách lõi phòng ở
+các cửa hẹp, connected components và lan nhãn theo khoảng cách qua ô free.
+Tên mặc định `R1`, `R2`, ...; sửa `name`/`aliases` trong YAML kết quả để có tên
+ngữ nghĩa. `--doorway-width` tính bằng mét, `--min-area` bằng m².
+Nếu tìm được dưới ba lõi, chương trình báo lỗi để điều chỉnh hoặc phân vùng
+thủ công. Vùng free bên ngoài tường do SLAM cũng có thể được phân vùng;
+phải xem ảnh kết quả, giữ các vùng robot có thể tiếp cận. Thuật toán không
+suy ra chức năng phòng hoặc chứng minh mọi đích đều đi được từ vị trí robot.
+
+## 3. Chạy mô phỏng và giọng nói
+
+Terminal 1:
+
+```bash
+cd ~/ur_robot_drawing
+source ttbot4_seman_nav/scripts/activate_hri.bash
+ros2 launch ttbot4_seman_nav coursework.launch.py \
+  regions:="$PWD/ttbot4_seman_nav/config/regions_small_room.yaml" \
+  world:=small_room
+```
+
+Launch mở simulation headless, RViz, localization, Nav2 và hai node của bài 7.
+Trên RViz đặt **2D Pose Estimate** nếu cần, đợi localization/Nav2 active và
+laser khớp tường. Nếu map có gốc khác, truyền `initial_x`, `initial_y`,
+`initial_yaw` hoặc `auto_initial_pose:=false` để đặt pose thủ công.
+Đảm bảo **world đúng với map**, không chỉ dựa vào tên file `small_room`.
+
+Launch mặc định thêm footprint dock thấp vào một bản đồ tạm vì LiDAR không
+nhìn thấy dock; Nav2 sẽ lập đường vòng thay vì đâm dock khi đi B → C. Vị trí
+dock được suy ra từ `initial_x/y/yaw` của robot lúc spawn, theo mô hình dock
+chuẩn của TurtleBot 4. Đặt các giá trị này đúng ngay cả khi dùng pose thủ công.
+Bản đồ SLAM gốc không bị sửa; file tạm được dọn khi tắt launch. Dùng
+`dock_keepout:=false` nếu dùng một simulator có bố trí dock khác.
+
+Terminal 2, undock trước khi gửi lệnh:
+
+```bash
+cd ~/ur_robot_drawing
+source ttbot4_seman_nav/scripts/activate_hri.bash
+ros2 action send_goal /undock irobot_create_msgs/action/Undock '{}'
+```
+
+Đợi `SUCCEEDED`. Khi model đã tải xong, giữ im lặng khoảng 0,6 giây để đo
+nhiễu nền. Chờ log **Listening**, rồi nói tiếng Anh tự nhiên. Không cần căn
+lượt thu 5 giây: micro nghe liên tục, giữ sẵn 0,3 giây trước khi phát hiện
+giọng nói để tránh mất đầu từ; khoảng im lặng 0,8 giây kết thúc câu.
+Micro vẫn thu khi Whisper đang xử lý. Nên đợi kết quả và nhiệm vụ hiện tại
+hoàn thành trước khi gửi lệnh tiếp theo.
+
+Mặc định dùng Whisper `base.en`, tiếng Anh, CPU; lần đầu cần Internet để tải
+model. Có thể dùng `whisper_model:=small.en` để thử model lớn hơn hoặc
+`whisper_model:=tiny.en` nếu CPU xử lý chậm. Khả năng nhận diện thực tế cần
+kiểm tra với micro và tiếng ồn tại chỗ.
+
+Các câu lệnh:
+
+1. “Go to area A.” hoặc “Go to the classroom.”
+2. “Go from area A to area B.”
+3. “Go to the laboratory.” hoặc “Go to the lab.”
+4. “Go from room A via the corridor then to room B.”
+5. “Stop.” hoặc “Cancel navigation.”
+
+Node giữ thứ tự A → C → B và chỉ chuyển đích khi goal trước thành công.
+Kể cả robot đang ở nơi khác, lệnh từ A đến B luôn gửi A trước B. Tên vùng
+mặc định: A = Classroom, B = Laboratory, C = Corridor; nhận cả `area`,
+`room`, `region`, `zone` kèm ID. Alias tiếng Việt vẫn dùng được khi gửi
+văn bản trực tiếp. Nếu dùng file vùng tự sinh, thêm tên/alias tiếng Anh
+cho đúng vùng trong YAML trước khi gọi theo tên.
+
+“Stop” gửi yêu cầu cancel tới Nav2 sau khi nhận diện. Thu và suy luận vẫn
+có độ trễ; dùng nút dừng simulator khi cần dừng ngay.
+
+Lệnh chứa bất kỳ vùng không tồn tại sẽ bị từ chối toàn bộ. Khi đang có nhiệm
+vụ, lệnh mới bị từ chối; hãy hủy và đợi kết quả hủy rồi gửi lại. Goal lỗi,
+bị từ chối hoặc quá 180 giây sẽ dừng các điểm còn lại. Nav2 đảm nhiệm tránh
+vật cản và lập đường; metadata map và khoảng trống tại đích được kiểm tra
+lại trên `/map` đang chạy trước mỗi goal.
+Watchdog timeout chạy bằng đồng hồ monotonic riêng, vẫn gửi yêu cầu hủy
+khi Gazebo pause hoặc mất `/clock`; nó chờ Nav2 xác nhận dừng trước khi
+cho nhận nhiệm vụ mới.
+
+Đọc trạng thái:
+
+```bash
+ros2 topic echo /semantic/status
+```
+
+Trong RViz: **Add → By topic → /semantic/markers → MarkerArray** để hiện tên
+vùng và các điểm đích. Ảnh PNG xuất ra hiển thị đầy đủ phần tô màu phân vùng.
+
+## 4. Kiểm tra bằng văn bản, chọn micro và dùng Nav2 có sẵn
+
+Tắt micro khi kiểm tra riêng logic:
+
+```bash
+ros2 launch ttbot4_seman_nav coursework.launch.py \
+  regions:="$PWD/ttbot4_seman_nav/config/regions_small_room.yaml" speech:=false
+```
+
+Trong terminal đã kích hoạt `hri`:
+
+```bash
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go to area A.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go from area A to area B.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go to the laboratory.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Go to area Z.'}"
+ros2 topic pub --once /voice/command std_msgs/msg/String "{data: 'Stop'}"
+```
+
+Gửi từng câu khi nhiệm vụ trước đã hoàn thành. Câu chứa Z phải báo từ chối,
+không di chuyển. Nếu đã mở Nav2 đúng map, thêm `navigation:=false` để chỉ
+chạy phần bài 7. Cấu hình hiện tại dùng namespace gốc và frame `map`.
+
+Chọn micro hoặc GPU bằng cách chạy node giọng nói riêng, tắt `speech` trong launch:
+
+```bash
+python -c 'import sounddevice as sd; print(sd.query_devices())'
+ros2 run ttbot4_seman_nav speech_recognition --ros-args \
+  -p microphone:="USB Audio" -p model:=base.en -p language:=en -p device:=cpu
+```
+
+Nếu import `rclpy` lỗi, kiểm tra `which python`, phiên bản 3.10 và đã source
+ROS. Nếu PortAudio không có thiết bị, kiểm tra micro của Ubuntu/VM và chọn
+đúng thiết bị. Model cần tải thành công trước khi bắt đầu thu. Node dùng sample rate gốc
+của micro rồi chuyển về 16 kHz cho Whisper. Có thể chọn micro trực tiếp khi
+launch bằng `microphone:="USB Audio"` hoặc chỉ số thiết bị (dạng chuỗi).
+
+Các tham số node để chỉnh thu:
+
+- `min_rms` mặc định 0.006: ngưỡng năng lượng tối thiểu. Nếu giọng nhỏ chưa
+  được bắt, thử 0.003; nếu thu cả tiếng động, tăng lên 0.01. Ngưỡng thực tế
+  còn được nâng theo nhiễu nền đo lúc khởi động.
+- `silence_seconds` mặc định 0.8: tăng lên 1.2 nếu hay ngắt giữa câu.
+- `pre_roll_seconds` mặc định 0.3: giữ phần đầu trước khi phát hiện giọng.
+- `min_speech_seconds` mặc định 0.24: bỏ tiếng click/đoạn quá ngắn.
+- `record_seconds` mặc định 8.0: giới hạn tối đa một câu, không phải chu kỳ thu.
+- `calibration_seconds` mặc định 0.6: giữ im lặng khi đo nhiễu nền.
+
+Hàng đợi chứa tối đa hai câu trong lúc xử lý; nếu đầy, node báo câu bị bỏ
+qua để bạn nói lại. Cơ chế năng lượng có thể bắt cả tiếng quạt lớn hoặc
+người khác nói; nên dùng micro gần miệng và điều chỉnh ngưỡng ở môi trường thật.
+
+## 5. Kiểm thử và giới hạn xác minh
+
+```bash
+source ttbot4_seman_nav/scripts/activate_hri.bash
+ROS_DOMAIN_ID=86 python -m pytest ttbot4_seman_nav/test -q
+ROS_DOMAIN_ID=86 python -m colcon --log-base log_seman test --build-base build_seman \
+  --install-base install_seman --packages-select ttbot4_seman_nav --python-testing pytest
+python -m colcon test-result --test-result-base build_seman --verbose
+```
+
+Unit test kiểm tra câu lệnh tiếng Anh/Việt, bắt đầu/kết thúc câu nói, nhiễu nền,
+giới hạn thời gian thu, chuyển sample rate, nhiều điểm, vùng không tồn tại,
+chuyển tọa độ với map xoay, tránh unknown/tường, phân vùng tự động và thủ công.
+Kiểm thử ROS dùng action server Nav2 giả lập để xác minh thứ tự đích, hủy
+trước khi chấp nhận goal, dừng sau abort và từ chối map không khớp.
+Kiểm thử còn xác minh timeout/cancel khi `/clock` không đến hoặc đã pause,
+và từ chối runtime TF2 có lỗi đã biết.
+Kiểm tra bản đồ tạm có dock với origin/yaw khác nhau, giữ nguyên dữ liệu
+SLAM gốc và không cho map khởi tạo vượt qua bước kiểm tra launch.
+Khóa pytest dưới phiên bản 9 để tương thích plugin launch_testing của Humble.
+Chạy nghiệm thu Gazebo/micro vẫn cần xác nhận riêng: ít nhất ba vùng có nhãn,
+ba câu giọng nói điều khiển đúng, A → B đúng thứ tự, tránh vật cản và từ chối Z.
+Không xem kết quả build/unit test là bằng chứng robot đã chạy thành công.
+
+Kiểm tra ngày 03/11/2026: build thành công, 28 test qua; Gazebo/Nav2 thực
+hiện thành công ba câu mẫu qua topic văn bản và lệnh đến C, từ chối Z.
+Sai số đích đo được 0.14–0.21 m. Micro/Whisper thu liên tục nhiều lượt;
+chưa nghiệm thu độ chính xác ba câu nói thực tế. Khi thoát launch,
+Gazebo/Nav2 đôi lúc vẫn cần SIGTERM/SIGKILL; lỗi shutdown này chưa xử lý.
