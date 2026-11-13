@@ -9,7 +9,7 @@ class Settings:
     angular_speed: float = 0.4
     arc_duration: float = 3.0
     step_duration: float = 1.0
-    confidence: float = 0.5
+    confidence: float = 0.55
     stable_samples: int = 3
     timeout: float = 2.0
 
@@ -43,8 +43,13 @@ class Controller:
             return
         self.seen = captured_at
         if emotion == 'neutral':
-            self.active = self.latched = self.candidate = None
-            self.count = 0
+            self.active = None
+            self.count = self.count + 1 if self.candidate == 'neutral' else 1
+            self.candidate = 'neutral'
+            # Stop immediately, but a one-frame neutral flicker cannot rearm
+            # and repeat a completed movement.
+            if self.count >= self.s.stable_samples:
+                self.latched = None
             return
         if self.candidate != emotion:
             self.active = None

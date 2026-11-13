@@ -2,7 +2,7 @@
 
 Chạy **TurtleBot 4 Lite trong Gazebo Fortress, ROS 2 Humble**. Webcam máy tính nhận diện biểu cảm người dùng; robot di chuyển trong world `emotion_arena` của package. Một lệnh launch mở cả Gazebo, tạo robot, kích hoạt bộ điều khiển bánh xe và chạy DeepFace/OpenCV. Không cần robot thật hoặc submodule.
 
-Luồng điều khiển: webcam → DeepFace → lọc biểu cảm → `/cmd_vel` (`Twist`, 20 Hz) → `sim_velocity_relay` → `/diffdrive_controller/cmd_vel_unstamped` → bánh xe trong Gazebo. `/odom` phản ánh chuyển động mô phỏng, `/clock` lấy từ Gazebo.
+Luồng điều khiển: webcam → MediaPipe tìm mặt → DeepFace phân loại vùng mặt → lọc biểu cảm → `/cmd_vel` (`Twist`, 20 Hz) → `sim_velocity_relay` → `/diffdrive_controller/cmd_vel_unstamped` → bánh xe trong Gazebo. `/odom` phản ánh chuyển động mô phỏng, `/clock` lấy từ Gazebo.
 
 | Biểu cảm | Hành động | Mặc định |
 |---|---|---|
@@ -65,11 +65,11 @@ Lần đầu model Emotion tải trọng số về cache ngoài repo, cần Inte
 
 ## Sử dụng
 
-Chờ robot xuất hiện trên sàn và controller được kích hoạt; giữ Neutral rồi thử từng biểu cảm trong bảng. Cửa sổ webcam hiển thị khung mặt, tên biểu cảm, điểm số và vận tốc. Điểm số mô hình không phải độ chính xác đã được hiệu chuẩn. Nhấn **Q/Esc** để dừng nhận diện (relay tự dừng robot); **Ctrl+C** ở terminal launch để đóng toàn bộ sim.
+Chờ robot xuất hiện trên sàn và controller được kích hoạt; giữ Neutral rồi thử từng biểu cảm trong bảng. Cửa sổ webcam hiển thị khung mặt, nhãn sau lọc, nhãn thô (`raw`), điểm số, FPS camera, thời gian inference, tuổi khung hình và hành động. Điểm số mô hình không phải độ chính xác đã được hiệu chuẩn. Nhấn **Q/Esc** để dừng nhận diện (relay tự dừng robot); **Ctrl+C** ở terminal launch để đóng toàn bộ sim.
 
-Mặc định cần 3 kết quả liên tiếp có điểm số ≥50% để bắt đầu. Mỗi biểu cảm chỉ kích hoạt một hành động, giữ nguyên không lặp vô hạn. Về Neutral để kích hoạt lại cùng hành động hoặc đổi sang biểu cảm khác. Khi đổi biểu cảm, robot dừng trong thời gian chờ đủ mẫu mới.
+Mặc định làm mượt toàn bộ điểm số biểu cảm trong khoảng 0.25 giây, cần điểm số sau lọc ≥55%, chênh lệch với nhãn đứng thứ hai ≥12 điểm phần trăm và 3 kết quả liên tiếp cùng nhãn để bắt đầu. Mỗi biểu cảm chỉ kích hoạt một hành động, giữ nguyên không lặp vô hạn. Giữ Neutral đủ 3 kết quả ổn định để kích hoạt lại cùng hành động, hoặc đổi sang biểu cảm khác. Neutral hợp lệ dừng robot ngay, nhưng một khung Neutral thoáng qua không cho phép lặp lại chuyển động. Khi đổi biểu cảm, robot dừng trong thời gian chờ đủ mẫu mới.
 
-Mất mặt, nhiều mặt, `disgust` (ngoài 6 trạng thái đề bài), điểm thấp hoặc lỗi camera làm robot dừng khi nhận kết quả. Nếu inference treo/chậm, dừng sau `timeout` kể từ lúc chụp mẫu hợp lệ cuối; giữ cùng biểu cảm không tự tiếp tục hành động đã timeout. Relay dừng đầu ra nếu mất `/cmd_vel` trong 0.5 giây. Controller bánh xe cũng có timeout 0.5 giây.
+Mất mặt, nhiều mặt, `disgust` (ngoài 6 trạng thái đề bài), điểm sau lọc thấp hoặc lỗi camera làm robot dừng khi nhận kết quả. Camera không có khung mới quá `camera_timeout` (0.5 giây) cũng làm robot dừng, kể cả khi inference đang bận. Nếu inference treo/chậm, dừng sau `timeout` kể từ lúc chụp mẫu hợp lệ cuối; giữ cùng biểu cảm không tự tiếp tục hành động đã timeout. Relay dừng đầu ra nếu mất `/cmd_vel` trong 0.5 giây. Controller bánh xe cũng có timeout 0.5 giây.
 
 Launch đặt `ROS_LOCALHOST_ONLY=1`. Dùng cùng giá trị trong terminal kiểm tra; nếu đang chạy bài ROS khác, chọn riêng `ROS_DOMAIN_ID` cho tất cả terminal của bài này để tránh trùng topic.
 
@@ -91,7 +91,32 @@ Chỉnh `config/emotions.yaml` trước khi build hoặc truyền file riêng:
 ./run.sh params_file:=/absolute/path/emotions.yaml show_camera:=false
 ```
 
-`linear_speed` dương, tối đa 0.2 m/s; `angular_speed` dương, tối đa 1 rad/s. `arc_duration` và `step_duration` giới hạn thời gian chuyển động. `stable_samples` đếm kết quả inference. `inference_period` là thời gian nghỉ giữa hai lần inference, không bảo đảm FPS. `timeout` dùng đồng hồ monotonic, không phụ thuộc `/clock`. Tham số đọc lúc khởi động; sửa cấu hình rồi khởi động lại. Topic bài này cố định `/cmd_vel` trong launch để khớp với relay mô phỏng.
+`linear_speed` dương, tối đa 0.2 m/s; `angular_speed` dương, tối đa 1 rad/s. `arc_duration` và `step_duration` giới hạn thời gian chuyển động. `stable_samples` đếm kết quả inference. `inference_period` là chu kỳ mục tiêu giữa hai lần bắt đầu inference (mặc định 0.1 giây); không cộng thêm thời gian nghỉ sau khi model xử lý xong. Không bảo đảm FPS nếu máy bận. `timeout` dùng đồng hồ monotonic, không phụ thuộc `/clock`. Tham số đọc lúc khởi động; sửa cấu hình rồi khởi động lại. Topic bài này cố định `/cmd_vel` trong launch để khớp với relay mô phỏng.
+
+## Camera và độ ổn định nhận diện
+
+Camera được đọc liên tục trong một luồng riêng. Preview chạy tối đa 30 FPS; inference chỉ lấy khung mới nhất từ một ô nhớ, bỏ qua các khung cũ thay vì xếp hàng. Preview không bị thay bằng ảnh cũ sau khi model xử lý xong. Camera yêu cầu MJPEG 640×480, 30 FPS và buffer 1; giá trị thực tế phụ thuộc driver, ánh sáng và phần cứng.
+
+MediaPipe tìm mặt trên ảnh thu nhỏ (rộng tối đa 320 px), lấy mốc mắt để hiệu chỉnh nghiêng nhẹ, rồi DeepFace chỉ phân loại vùng mặt 224×224. Không chạy lại bộ tìm mặt/mắt trên toàn ảnh trong mỗi lần phân loại. Cần đúng một mặt đủ lớn; không dùng `skip` trên toàn khung khi chưa xác minh có mặt.
+
+Bộ lọc làm mượt điểm số cả 7 nhãn, gồm `disgust`, theo thời gian và kiểm tra khoảng cách giữa hai điểm cao nhất. Bộ lọc được xóa khi mất mặt, xuất hiện nhiều mặt, mặt đổi vị trí quá xa hoặc khoảng thời gian nhận diện bị gián đoạn; điểm số cũ không bị mang sang một mặt ở vị trí khác. Cơ chế này giảm nhảy nhãn nhưng không bảo đảm mọi biểu cảm đều nhận đúng; nên nhìn thẳng, để mặt đủ lớn và chiếu sáng đều.
+
+Các tham số trong `config/emotions.yaml`:
+
+| Tham số | Mặc định | Ý nghĩa |
+|---|---|---|
+| `camera_width`, `camera_height`, `camera_fps` | 640, 480, 30 | Yêu cầu định dạng camera |
+| `camera_mjpeg` | true | Dùng MJPEG nếu camera hỗ trợ |
+| `camera_timeout` | 0.5 s | Dừng nếu không đọc được khung mới |
+| `detection_width` | 320 | Giới hạn chiều rộng ảnh tìm mặt |
+| `min_face_size` | 30 px | Kích thước mặt tối thiểu trên ảnh tìm mặt |
+| `detector_confidence` | 0.65 | Ngưỡng tìm mặt của MediaPipe |
+| `inference_period` | 0.1 s | Chu kỳ mục tiêu phân loại |
+| `smoothing_seconds` | 0.25 s | Độ mượt điểm số; tăng sẽ phản hồi chậm hơn |
+| `emotion_margin` | 0.12 | Chênh lệch tối thiểu giữa hai nhãn dẫn đầu |
+| `confidence`, `stable_samples` | 0.55, 3 | Điểm sau lọc và số mẫu xác nhận |
+
+Nếu cần giảm tải cho Gazebo, chạy `./run.sh headless:=true`. Nếu camera không hỗ trợ MJPEG, đặt `camera_mjpeg: false` trong file tham số riêng rồi truyền bằng `params_file:=...`. Sau khi chỉnh cấu hình, dừng và chạy lại `./run.sh` để build/nạp cấu hình mới.
 
 ## Kiểm thử
 
@@ -122,6 +147,6 @@ python test/check_sim_motion.py
 
 Script bơm sáu biểu cảm vào chính `Controller` rồi gửi `/cmd_vel`, kiểm tra dấu vận tốc đo từ `/odom`, sau đó kiểm tra robot dừng khi mất heartbeat. Đây là kiểm thử đường điều khiển và physics, không đo độ chính xác nhận diện khuôn mặt hay xác minh góc quay đủ 360°. Chế độ `recognition:=false` chỉ phục vụ kiểm tra sim; mặc định nhận diện webcam bật.
 
-Đã kiểm tra bằng Conda `hri`: `run.sh --check` và `run.sh --build-only` thành công; model Emotion ONNX thật đã tải/nạp và chạy dự đoán; 22 unit/ROS test đạt; Gazebo Fortress headless tạo TurtleBot 4 Lite và kích hoạt hai controller; kiểm tra `/odom` đạt cho cả sáu hành động và watchdog. Phần kiểm thử dùng dữ liệu khuôn mặt giả lập; chất lượng nhận diện với webcam người dùng và giao diện Gazebo cần được kiểm tra khi sử dụng.
+Đã kiểm tra bằng Conda `hri`: `run.sh --check` và `run.sh --build-only` thành công; model Emotion ONNX thật đã tải/nạp và chạy dự đoán; 37 unit/ROS test đạt; Gazebo Fortress headless tạo TurtleBot 4 Lite và kích hoạt hai controller; kiểm tra `/odom` đạt cho cả sáu hành động và watchdog. Benchmark 20 lần sau warm-up trên ảnh mẫu Grace Hopper của Matplotlib (410×480) trong Conda `hri`: pipeline cũ median 847.9 ms, mới 23.8 ms; đây là đo trên ảnh tĩnh, không phải cam kết FPS nhận diện trên mọi máy. Đo webcam thực trong 5 giây, không lưu ảnh: camera khoảng 20.5 FPS, tuổi khung sau khi đọc tới vòng preview p95 48.9 ms; FPS thực phụ thuộc driver và thời gian phơi sáng. Kiểm thử hồi quy xác nhận capture vẫn cập nhật trong khi inference bị chặn, timeout vẫn dừng robot và bộ lọc không đổi nhãn vì một mẫu nhiễu. Phần kiểm thử ROS dùng dữ liệu khuôn mặt giả lập; chất lượng nhận diện với webcam người dùng và giao diện Gazebo cần được kiểm tra khi sử dụng.
 
 Tham khảo: [TurtleBot 4 Simulator (Humble)](https://github.com/turtlebot/turtlebot4_simulator/tree/humble), [DeepFace](https://github.com/serengil/deepface).

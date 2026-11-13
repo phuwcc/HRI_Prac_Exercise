@@ -82,7 +82,7 @@ import sys
 from ament_index_python.packages import get_package_share_directory
 modules = ['rclpy', 'geometry_msgs.msg', 'colcon_core', 'setuptools']
 if sys.argv[1] == 'true':
-    modules += ['cv2', 'onnxruntime', 'deepface.DeepFace']
+    modules += ['cv2', 'mediapipe', 'onnxruntime', 'deepface.DeepFace']
 for name in modules:
     try:
         importlib.import_module(name)

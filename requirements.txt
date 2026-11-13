@@ -7,3 +7,4 @@ gdown>=3.10.1
 tqdm>=4.30
 onnxruntime>=1.13,<2
 pandas>=2,<3
+mediapipe==0.10.21

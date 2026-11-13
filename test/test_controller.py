@@ -50,7 +50,8 @@ def test_bounded_step_and_neutral_rearms():
     for t in (1.3, 1.4, 1.5):
         c.observe('fear', 0.9, t, t)
     assert c.command(1.5) == (0, 0)
-    c.observe('neutral', 0.9, 1.6, 1.6)
+    for t in (1.55, 1.6, 1.65):
+        c.observe('neutral', 0.9, t, t)
     for t in (1.7, 1.8, 1.9):
         c.observe('fear', 0.9, t, t)
     assert c.command(1.9)[0] > 0
@@ -94,3 +95,13 @@ def test_parse_deepface():
     assert parse_result([])[0] is None
     assert parse_result([face, face])[0] is None
     assert parse_result({'emotion': {'happy': 100}})[0] is None
+
+
+def test_single_neutral_flicker_stops_but_does_not_rearm():
+    c = ready('fear')
+    c.observe('neutral', 0.9, 0.3, 0.3)
+    assert c.command(0.3) == (0, 0)
+    for t in (0.4, 0.5, 0.6):
+        c.observe('fear', 0.9, t, t)
+    assert c.command(0.6) == (0, 0)
+    assert c.latched == 'fear'
