@@ -6,12 +6,12 @@ Luồng điều khiển: webcam → MediaPipe tìm mặt → DeepFace phân lo�
 
 | Biểu cảm | Hành động | Mặc định |
 |---|---|---|
-| Happy | Cong trái | v=0.08 m/s, ω=+0.4 rad/s, 3 s |
-| Sad | Cong phải | v=0.08 m/s, ω=−0.4 rad/s, 3 s |
+| Happy | Cong trái | v=0.10 m/s, ω=+0.5 rad/s, 3 s |
+| Sad | Cong phải | v=0.10 m/s, ω=−0.5 rad/s, 3 s |
 | Neutral | Dừng | v=ω=0 ngay khi kết quả hợp lệ |
-| Angry | Lùi nhẹ | v=−0.08 m/s, 1 s |
-| Surprise | Xoay một vòng tại chỗ | ω=+0.4 rad/s, khoảng 15.71 s |
-| Fear | Tiến nhẹ | v=+0.08 m/s, 1 s |
+| Angry | Lùi nhẹ | v=−0.10 m/s, 1 s |
+| Surprise | Xoay một vòng tại chỗ | ω=+0.5 rad/s, khoảng 12.57 s |
+| Fear | Tiến nhẹ | v=+0.10 m/s, 1 s |
 
 Góc xoay tính theo thời gian `2π / angular_speed`, là một vòng danh định, chưa đóng vòng bằng odometry. Bản này dùng thời gian thực cho webcam, timeout và thời lượng hành động: giữ sim chạy, không Pause khi đang thực hiện. Nếu máy chạy sim chậm hơn thời gian thực, góc/quãng đường sẽ ngắn hơn giá trị danh định. World có sàn trống 20×20 m, vòng xanh đánh dấu vị trí xuất phát.
 

@@ -5,8 +5,8 @@ import math
 
 @dataclass
 class Settings:
-    linear_speed: float = 0.08
-    angular_speed: float = 0.4
+    linear_speed: float = 0.10
+    angular_speed: float = 0.5
     arc_duration: float = 3.0
     step_duration: float = 1.0
     confidence: float = 0.35

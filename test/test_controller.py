@@ -16,8 +16,8 @@ def ready(emotion, **kwargs):
     ('angry', -1, 0), ('surprise', 0, 1), ('fear', 1, 0)])
 def test_six_actions(emotion, v, w):
     linear, angular = ready(emotion).command(0.2)
-    assert linear == pytest.approx(v * 0.08)
-    assert angular == pytest.approx(w * 0.4)
+    assert linear == pytest.approx(v * 0.10)
+    assert angular == pytest.approx(w * 0.5)
 
 
 def test_stability_and_low_confidence():
@@ -65,7 +65,7 @@ def test_turn_one_nominal_revolution():
         c.observe('surprise', 0.9, t, t)
         v, w = c.command(t)
         assert v == 0
-        assert w == (0.4 if t < end else 0)
+        assert w == (0.5 if t < end else 0)
 
 
 def test_neutral_and_expression_change_interrupt():

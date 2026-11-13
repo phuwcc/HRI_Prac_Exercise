@@ -3,8 +3,8 @@ face_emote:
     camera_index: 0
     show_camera: true
     cmd_vel_topic: /cmd_vel
-    linear_speed: 0.08
-    angular_speed: 0.4
+    linear_speed: 0.10
+    angular_speed: 0.5
     arc_duration: 3.0
     step_duration: 1.0
     confidence: 0.35
