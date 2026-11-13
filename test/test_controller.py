@@ -99,9 +99,28 @@ def test_parse_deepface():
 
 def test_single_neutral_flicker_stops_but_does_not_rearm():
     c = ready('fear')
-    c.observe('neutral', 0.9, 0.3, 0.3)
-    assert c.command(0.3) == (0, 0)
-    for t in (0.4, 0.5, 0.6):
+    assert c.command(1.21) == (0, 0)  # Completed, rather than interrupted.
+    c.observe('neutral', 0.9, 1.3, 1.3)
+    assert c.command(1.3) == (0, 0)
+    for t in (1.4, 1.5, 1.6):
         c.observe('fear', 0.9, t, t)
-    assert c.command(0.6) == (0, 0)
+    assert c.command(1.6) == (0, 0)
     assert c.latched == 'fear'
+
+
+@pytest.mark.parametrize('interruption', ['invalid', 'timeout', 'neutral', 'other_label'])
+def test_interrupted_action_retries_after_exactly_three_fresh_samples(interruption):
+    c = ready('happy')
+    assert c.command(0.2) != (0, 0)
+    if interruption == 'timeout':
+        assert c.command(2.3) == (0, 0)
+        start = 2.4
+    else:
+        label = {'invalid': None, 'neutral': 'neutral', 'other_label': 'sad'}[interruption]
+        c.observe(label, 0.9, 0.3, 0.3)
+        assert c.command(0.3) == (0, 0)
+        start = 0.4
+    for i in range(3):
+        t = start + i * 0.1
+        c.observe('happy', 0.36, t, t)
+        assert (c.command(t) != (0, 0)) == (i == 2)

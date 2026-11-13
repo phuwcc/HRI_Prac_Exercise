@@ -9,7 +9,7 @@ class Settings:
     angular_speed: float = 0.4
     arc_duration: float = 3.0
     step_duration: float = 1.0
-    confidence: float = 0.55
+    confidence: float = 0.35
     stable_samples: int = 3
     timeout: float = 2.0
 
@@ -38,11 +38,12 @@ class Controller:
         if (emotion not in ('happy', 'sad', 'neutral', 'angry', 'surprise', 'fear')
                 or not math.isfinite(confidence) or confidence < self.s.confidence
                 or now - captured_at > self.s.timeout):
-            self.active = None
-            self.candidate, self.count = None, 0
+            self.interrupt()
             return
         self.seen = captured_at
         if emotion == 'neutral':
+            if self.active is not None:
+                self.latched = None
             self.active = None
             self.count = self.count + 1 if self.candidate == 'neutral' else 1
             self.candidate = 'neutral'
@@ -52,6 +53,8 @@ class Controller:
                 self.latched = None
             return
         if self.candidate != emotion:
+            if self.active is not None:
+                self.latched = None
             self.active = None
             self.candidate, self.count = emotion, 1
         else:
@@ -60,10 +63,17 @@ class Controller:
             self.active = self.latched = emotion
             self.started = now
 
+    def interrupt(self):
+        # An interrupted movement can be retried after three fresh detections.
+        # A normally completed movement stays latched to avoid endless repeats.
+        if self.active is not None:
+            self.latched = None
+        self.active = None
+        self.candidate, self.count = None, 0
+
     def command(self, now):
         if now - self.seen > self.s.timeout:
-            self.active = None
-            self.candidate, self.count = None, 0
+            self.interrupt()
         if self.active is None:
             return 0.0, 0.0
         s = self.s

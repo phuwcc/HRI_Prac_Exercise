@@ -5,7 +5,7 @@ import cv2
 
 
 class FaceAnalyzer:
-    def __init__(self, detection_width=320, min_face_size=30, detector_confidence=0.65):
+    def __init__(self, detection_width=320, min_face_size=24, detector_confidence=0.5):
         import mediapipe as mp
         from deepface import DeepFace
         self.deepface = DeepFace

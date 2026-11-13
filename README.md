@@ -65,11 +65,13 @@ Lần đầu model Emotion tải trọng số về cache ngoài repo, cần Inte
 
 ## Sử dụng
 
-Chờ robot xuất hiện trên sàn và controller được kích hoạt; giữ Neutral rồi thử từng biểu cảm trong bảng. Cửa sổ webcam hiển thị khung mặt, nhãn sau lọc, nhãn thô (`raw`), điểm số, FPS camera, thời gian inference, tuổi khung hình và hành động. Điểm số mô hình không phải độ chính xác đã được hiệu chuẩn. Nhấn **Q/Esc** để dừng nhận diện (relay tự dừng robot); **Ctrl+C** ở terminal launch để đóng toàn bộ sim.
+Chờ robot xuất hiện trên sàn và controller được kích hoạt; giữ Neutral rồi thử từng biểu cảm trong bảng. Cửa sổ webcam hiển thị khung mặt, nhãn hợp lệ, nhãn thô (`raw`), điểm số, FPS camera, thời gian inference, tuổi khung hình và hành động. Điểm số mô hình không phải độ chính xác đã được hiệu chuẩn. Nhấn **Q/Esc** để dừng nhận diện (relay tự dừng robot); **Ctrl+C** ở terminal launch để đóng toàn bộ sim.
 
-Mặc định làm mượt toàn bộ điểm số biểu cảm trong khoảng 0.25 giây, cần điểm số sau lọc ≥55%, chênh lệch với nhãn đứng thứ hai ≥12 điểm phần trăm và 3 kết quả liên tiếp cùng nhãn để bắt đầu. Mỗi biểu cảm chỉ kích hoạt một hành động, giữ nguyên không lặp vô hạn. Giữ Neutral đủ 3 kết quả ổn định để kích hoạt lại cùng hành động, hoặc đổi sang biểu cảm khác. Neutral hợp lệ dừng robot ngay, nhưng một khung Neutral thoáng qua không cho phép lặp lại chuyển động. Khi đổi biểu cảm, robot dừng trong thời gian chờ đủ mẫu mới.
+Mặc định lấy nhãn có điểm cao nhất ngay trên từng khung nhận diện: điểm ≥35%, không cần chờ EMA hay chênh lệch điểm với nhãn thứ hai. **Đúng 3 khung mới liên tiếp có cùng biểu cảm hợp lệ thì bắt đầu hành động**; khung thứ nhất và thứ hai chưa cho robot chạy. Không đếm lặp một khung theo tốc độ preview. Với inference mục tiêu 10 Hz, thời gian từ mẫu thứ nhất tới mẫu thứ ba khoảng 0.2 giây khi máy theo kịp. Bộ đếm `Confirm: happy 1/3`, `2/3`, `3/3` hiện trực tiếp trên camera.
 
-Mất mặt, nhiều mặt, `disgust` (ngoài 6 trạng thái đề bài), điểm sau lọc thấp hoặc lỗi camera làm robot dừng khi nhận kết quả. Camera không có khung mới quá `camera_timeout` (0.5 giây) cũng làm robot dừng, kể cả khi inference đang bận. Nếu inference treo/chậm, dừng sau `timeout` kể từ lúc chụp mẫu hợp lệ cuối; giữ cùng biểu cảm không tự tiếp tục hành động đã timeout. Relay dừng đầu ra nếu mất `/cmd_vel` trong 0.5 giây. Controller bánh xe cũng có timeout 0.5 giây.
+Nếu hành động đang chạy bị ngắt bởi mẫu nhiễu, Neutral, đổi nhãn hoặc timeout, robot có thể chạy lại sau 3 khung mới hợp lệ cùng biểu cảm. Nếu hành động đã kết thúc đủ thời lượng, giữ nguyên biểu cảm không lặp vô hạn: giữ Neutral đủ 3 mẫu để kích hoạt lại hoặc đổi sang biểu cảm khác. Neutral hợp lệ vẫn dừng robot ngay. Hạ ngưỡng giúp dễ kích hoạt hơn, không làm tăng độ chính xác vốn có của model.
+
+Mất mặt, nhiều mặt, `disgust` (ngoài 6 trạng thái đề bài), điểm sau lọc thấp hoặc lỗi camera làm robot dừng khi nhận kết quả. Camera không có khung mới quá `camera_timeout` (0.5 giây) cũng làm robot dừng, kể cả khi inference đang bận. Nếu inference treo/chậm, dừng sau `timeout` kể từ lúc chụp mẫu hợp lệ cuối; chỉ nhận lại hành động sau 3 kết quả mới hợp lệ, không tái sử dụng kết quả cũ. Relay dừng đầu ra nếu mất `/cmd_vel` trong 0.5 giây. Controller bánh xe cũng có timeout 0.5 giây.
 
 Launch đặt `ROS_LOCALHOST_ONLY=1`. Dùng cùng giá trị trong terminal kiểm tra; nếu đang chạy bài ROS khác, chọn riêng `ROS_DOMAIN_ID` cho tất cả terminal của bài này để tránh trùng topic.
 
@@ -99,7 +101,7 @@ Camera được đọc liên tục trong một luồng riêng. Preview chạy t�
 
 MediaPipe tìm mặt trên ảnh thu nhỏ (rộng tối đa 320 px), lấy mốc mắt để hiệu chỉnh nghiêng nhẹ, rồi DeepFace chỉ phân loại vùng mặt 224×224. Không chạy lại bộ tìm mặt/mắt trên toàn ảnh trong mỗi lần phân loại. Cần đúng một mặt đủ lớn; không dùng `skip` trên toàn khung khi chưa xác minh có mặt.
 
-Bộ lọc làm mượt điểm số cả 7 nhãn, gồm `disgust`, theo thời gian và kiểm tra khoảng cách giữa hai điểm cao nhất. Bộ lọc được xóa khi mất mặt, xuất hiện nhiều mặt, mặt đổi vị trí quá xa hoặc khoảng thời gian nhận diện bị gián đoạn; điểm số cũ không bị mang sang một mặt ở vị trí khác. Cơ chế này giảm nhảy nhãn nhưng không bảo đảm mọi biểu cảm đều nhận đúng; nên nhìn thẳng, để mặt đủ lớn và chiếu sáng đều.
+Vẫn xét cả 7 nhãn, gồm `disgust`; không ép `disgust` thành một lệnh chuyển động. Mẫu dưới ngưỡng, hòa điểm, mất mặt hoặc nhiều mặt sẽ ngắt chuỗi xác nhận; ba mẫu phải liên tiếp. Mặc định `smoothing_seconds: 0.0` và `emotion_margin: 0.0` để tránh chờ thêm ngoài 3 khung. Nếu muốn tự tăng độ mượt, có thể đặt `smoothing_seconds` lớn hơn 0, nhưng việc này sẽ làm trễ nhận nhãn mới. Nên nhìn thẳng, để mặt đủ lớn và chiếu sáng đều.
 
 Các tham số trong `config/emotions.yaml`:
 
@@ -109,12 +111,12 @@ Các tham số trong `config/emotions.yaml`:
 | `camera_mjpeg` | true | Dùng MJPEG nếu camera hỗ trợ |
 | `camera_timeout` | 0.5 s | Dừng nếu không đọc được khung mới |
 | `detection_width` | 320 | Giới hạn chiều rộng ảnh tìm mặt |
-| `min_face_size` | 30 px | Kích thước mặt tối thiểu trên ảnh tìm mặt |
-| `detector_confidence` | 0.65 | Ngưỡng tìm mặt của MediaPipe |
+| `min_face_size` | 24 px | Kích thước mặt tối thiểu trên ảnh tìm mặt |
+| `detector_confidence` | 0.5 | Ngưỡng tìm mặt của MediaPipe |
 | `inference_period` | 0.1 s | Chu kỳ mục tiêu phân loại |
-| `smoothing_seconds` | 0.25 s | Độ mượt điểm số; tăng sẽ phản hồi chậm hơn |
-| `emotion_margin` | 0.12 | Chênh lệch tối thiểu giữa hai nhãn dẫn đầu |
-| `confidence`, `stable_samples` | 0.55, 3 | Điểm sau lọc và số mẫu xác nhận |
+| `smoothing_seconds` | 0.0 s | Tắt EMA mặc định; tăng sẽ phản hồi chậm hơn |
+| `emotion_margin` | 0.0 | Không yêu cầu thêm chênh lệch điểm; vẫn loại mẫu hòa điểm |
+| `confidence`, `stable_samples` | 0.35, 3 | Điểm tối thiểu và đúng 3 mẫu liên tiếp để chạy |
 
 Nếu cần giảm tải cho Gazebo, chạy `./run.sh headless:=true`. Nếu camera không hỗ trợ MJPEG, đặt `camera_mjpeg: false` trong file tham số riêng rồi truyền bằng `params_file:=...`. Sau khi chỉnh cấu hình, dừng và chạy lại `./run.sh` để build/nạp cấu hình mới.
 
@@ -147,6 +149,6 @@ python test/check_sim_motion.py
 
 Script bơm sáu biểu cảm vào chính `Controller` rồi gửi `/cmd_vel`, kiểm tra dấu vận tốc đo từ `/odom`, sau đó kiểm tra robot dừng khi mất heartbeat. Đây là kiểm thử đường điều khiển và physics, không đo độ chính xác nhận diện khuôn mặt hay xác minh góc quay đủ 360°. Chế độ `recognition:=false` chỉ phục vụ kiểm tra sim; mặc định nhận diện webcam bật.
 
-Đã kiểm tra bằng Conda `hri`: `run.sh --check` và `run.sh --build-only` thành công; model Emotion ONNX thật đã tải/nạp và chạy dự đoán; 37 unit/ROS test đạt; Gazebo Fortress headless tạo TurtleBot 4 Lite và kích hoạt hai controller; kiểm tra `/odom` đạt cho cả sáu hành động và watchdog. Benchmark 20 lần sau warm-up trên ảnh mẫu Grace Hopper của Matplotlib (410×480) trong Conda `hri`: pipeline cũ median 847.9 ms, mới 23.8 ms; đây là đo trên ảnh tĩnh, không phải cam kết FPS nhận diện trên mọi máy. Đo webcam thực trong 5 giây, không lưu ảnh: camera khoảng 20.5 FPS, tuổi khung sau khi đọc tới vòng preview p95 48.9 ms; FPS thực phụ thuộc driver và thời gian phơi sáng. Kiểm thử hồi quy xác nhận capture vẫn cập nhật trong khi inference bị chặn, timeout vẫn dừng robot và bộ lọc không đổi nhãn vì một mẫu nhiễu. Phần kiểm thử ROS dùng dữ liệu khuôn mặt giả lập; chất lượng nhận diện với webcam người dùng và giao diện Gazebo cần được kiểm tra khi sử dụng.
+Đã kiểm tra bằng Conda `hri`: `run.sh --check` và `run.sh --build-only` thành công; model Emotion ONNX thật đã tải/nạp và chạy dự đoán; 48 unit/ROS test đạt; Gazebo Fortress headless tạo TurtleBot 4 Lite và kích hoạt hai controller; kiểm tra `/odom` đạt cho cả sáu hành động và watchdog. Benchmark 20 lần sau warm-up trên ảnh mẫu Grace Hopper của Matplotlib (410×480) trong Conda `hri`: pipeline cũ median 847.9 ms, mới 23.8 ms; đây là đo trên ảnh tĩnh, không phải cam kết FPS nhận diện trên mọi máy. Đo webcam thực trong 5 giây, không lưu ảnh: camera khoảng 20.5 FPS, tuổi khung sau khi đọc tới vòng preview p95 48.9 ms; FPS thực phụ thuộc driver và thời gian phơi sáng. Kiểm thử hồi quy xác nhận capture vẫn cập nhật trong khi inference bị chặn, timeout vẫn dừng robot và một mẫu nhiễu không đủ kích hoạt hành động. Test mới xác nhận cả 5 biểu cảm chuyển động với điểm 36% đều bắt đầu đúng mẫu thứ ba, không bị điểm EMA cũ giữ lại; hành động bị ngắt cũng thử lại được sau đúng 3 mẫu mới. Phần kiểm thử ROS dùng dữ liệu khuôn mặt giả lập; chất lượng nhận diện với webcam người dùng và giao diện Gazebo cần được kiểm tra khi sử dụng.
 
 Tham khảo: [TurtleBot 4 Simulator (Humble)](https://github.com/turtlebot/turtlebot4_simulator/tree/humble), [DeepFace](https://github.com/serengil/deepface).

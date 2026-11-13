@@ -22,10 +22,10 @@ def parse_result(results):
 
 
 class EmotionSmoother:
-    """Time-based probability smoothing; never carry scores across lost faces."""
-    def __init__(self, confidence=0.55, margin=0.12, time_constant=0.25, max_gap=0.7):
+    """Validate each frame; optional EMA (disabled at zero) never spans lost faces."""
+    def __init__(self, confidence=0.35, margin=0.0, time_constant=0.0, max_gap=0.7):
         if (not 0 <= confidence <= 1 or not 0 <= margin <= 1
-                or not math.isfinite(time_constant) or time_constant <= 0
+                or not math.isfinite(time_constant) or time_constant < 0
                 or not math.isfinite(max_gap) or max_gap <= 0):
             raise ValueError('Invalid smoothing settings')
         self.confidence, self.margin = confidence, margin
@@ -52,7 +52,7 @@ class EmotionSmoother:
         scores = {k: v / total for k, v in scores.items()}
         # Reset when another face occupies a different part of the image.
         same_face = self.region is not None and self.overlap(self.region, region) >= 0.25
-        if (self.scores is None or not same_face or captured_at <= self.timestamp
+        if (self.time_constant == 0 or self.scores is None or not same_face or captured_at <= self.timestamp
                 or captured_at - self.timestamp > self.max_gap):
             self.scores = scores
         else:
@@ -63,7 +63,8 @@ class EmotionSmoother:
         ranked = sorted(self.scores.items(), key=lambda item: item[1], reverse=True)
         best, probability = ranked[0]
         runner_up = ranked[1][1] if len(ranked) > 1 else 0.0
-        if probability < self.confidence or probability - runner_up < self.margin:
+        if (probability < self.confidence or probability <= runner_up
+                or probability - runner_up < self.margin):
             return None, probability, region
         return best, probability, region
 

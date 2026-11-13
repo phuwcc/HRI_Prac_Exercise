@@ -25,8 +25,8 @@ def test_latest_frame_drops_backlog_and_wakes_consumers():
     assert frames.after(0) is None
 
 
-def test_one_label_spike_does_not_switch_filtered_emotion():
-    smoother = EmotionSmoother()
+def test_optional_smoothing_still_filters_single_label_spike():
+    smoother = EmotionSmoother(time_constant=0.25)
     for i in range(10):
         assert smoother.update(face(), i * 0.1)[0] == 'happy'
     assert smoother.update(face(1, 98, 1), 1.0)[0] == 'happy'
@@ -63,3 +63,41 @@ def test_filter_rejects_nonfinite_scores_and_does_not_drop_disgust():
     sample = face()
     sample[0]['emotion'] = {'disgust': 99, 'happy': 1}
     assert smoother.update(sample, 1)[0] == 'disgust'
+
+
+@pytest.mark.parametrize('emotion', ['happy', 'sad', 'angry', 'surprise', 'fear'])
+def test_default_pipeline_triggers_on_exactly_third_modest_confidence_frame(emotion):
+    from ttbot4_face_emote.controller import Controller, Settings
+    smoother = EmotionSmoother()
+    controller = Controller(Settings())
+    # Earlier strong predictions must not delay a new raw three-frame sequence.
+    for t in (0, 0.1, 0.2):
+        label, score, _ = smoother.update(face(neutral=98, happy=1, sad=1), t)
+        controller.observe(label, score, t, t)
+    for i, t in enumerate((0.3, 0.4, 0.5), 1):
+        sample = face()
+        sample[0]['emotion'] = {emotion: 36, 'neutral': 34, 'disgust': 30}
+        label, score, _ = smoother.update(sample, t)
+        assert label == emotion
+        controller.observe(label, score, t, t)
+        assert controller.count == i
+        if i < 3:
+            assert controller.command(t) == (0, 0)
+        else:
+            assert controller.command(t) != (0, 0)
+
+
+def test_default_pipeline_rejects_exact_ties_and_below_threshold():
+    smoother = EmotionSmoother()
+    assert smoother.update(face(50, 50, 0), 0)[0] is None
+    assert smoother.update(face(34, 33, 33), 0.1)[0] is None
+
+
+def test_one_raw_spike_does_not_pass_three_frame_controller_confirmation():
+    from ttbot4_face_emote.controller import Controller, Settings
+    smoother = EmotionSmoother()
+    controller = Controller(Settings())
+    for t, result in ((0, face()), (0.1, face(1, 98, 1)), (0.2, face())):
+        label, score, _ = smoother.update(result, t)
+        controller.observe(label, score, t, t)
+        assert controller.command(t) == (0, 0)

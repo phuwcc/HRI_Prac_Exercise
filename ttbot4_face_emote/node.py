@@ -24,8 +24,8 @@ class FaceEmoteNode(Node):
         extra = {'camera_index': 0, 'show_camera': True, 'cmd_vel_topic': '/cmd_vel',
                  'inference_period': 0.1, 'camera_width': 640, 'camera_height': 480,
                  'camera_fps': 30, 'camera_timeout': 0.5, 'camera_mjpeg': True,
-                 'detection_width': 320, 'min_face_size': 30, 'detector_confidence': 0.65,
-                 'smoothing_seconds': 0.25, 'emotion_margin': 0.12}
+                 'detection_width': 320, 'min_face_size': 24, 'detector_confidence': 0.5,
+                 'smoothing_seconds': 0.0, 'emotion_margin': 0.0}
         for name, value in extra.items():
             self.declare_parameter(name, value)
         self.options = {key: self.get_parameter(key).value for key in extra}
@@ -178,7 +178,7 @@ class FaceEmoteNode(Node):
             x, y, w, h = (int(region[k]) for k in ('x', 'y', 'w', 'h'))
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
         lines = [status, f'Camera {fps:.0f} FPS | inference {elapsed:.0f} ms | frame age {(now-captured)*1000:.0f} ms',
-                 f'Action: {self.controller.active or "STOP"} | Q/Esc: exit']
+                 f'Confirm: {self.controller.candidate or "none"} {min(self.controller.count, self.controller.s.stable_samples)}/{self.controller.s.stable_samples} | Action: {self.controller.active or "STOP"} | Q/Esc: exit']
         for i, line in enumerate(lines):
             cv2.putText(frame, line, (10, 25+i*25), cv2.FONT_HERSHEY_SIMPLEX,
                         0.5, (0, 255, 255), 1, cv2.LINE_AA)
