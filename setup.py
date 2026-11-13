@@ -6,7 +6,7 @@ setup(
     name=package, version='1.0.0', packages=find_packages(exclude=['test']),
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package]),
-        ('share/' + package, ['package.xml', 'README.md', 'requirements.txt', 'bai8.txt']),
+        ('share/' + package, ['package.xml', 'README.md', 'requirements.txt', 'requirements-models.txt', 'bai8.txt', 'run.sh']),
         ('share/' + package + '/launch', glob('launch/*.launch.py')),
         ('share/' + package + '/config', glob('config/*.yaml')),
         ('share/' + package + '/worlds', glob('worlds/*.sdf')),

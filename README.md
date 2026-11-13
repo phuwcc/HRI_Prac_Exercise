@@ -15,43 +15,55 @@ Luồng điều khiển: webcam → DeepFace → lọc biểu cảm → `/cmd_ve
 
 Góc xoay tính theo thời gian `2π / angular_speed`, là một vòng danh định, chưa đóng vòng bằng odometry. Bản này dùng thời gian thực cho webcam, timeout và thời lượng hành động: giữ sim chạy, không Pause khi đang thực hiện. Nếu máy chạy sim chậm hơn thời gian thực, góc/quãng đường sẽ ngắn hơn giá trị danh định. World có sàn trống 20×20 m, vòng xanh đánh dấu vị trí xuất phát.
 
-## Cài đặt
+## Chạy bài 8 bằng run.sh và Conda hri
 
-Ubuntu 22.04 + ROS 2 Humble + Gazebo Fortress (không dùng launch Jazzy/Harmonic).
+Cần Ubuntu 22.04 + ROS 2 Humble + Gazebo Fortress và môi trường Conda `hri` có sẵn, dùng Python 3.10. Script tự kích hoạt `hri`, source ROS 2, kiểm tra thư viện, build bằng Python của `hri` rồi mở sim và webcam. Không cần tạo venv hoặc kích hoạt Conda thủ công.
+
+Các gói ROS cài một lần nếu máy chưa có:
 
 ```bash
-source /opt/ros/humble/setup.bash
-sudo apt install python3-venv python3-colcon-common-extensions python3-pytest \
-  ros-humble-turtlebot4-simulator ros-humble-ros-gz-sim ros-humble-ros-gz-bridge \
-  ros-humble-ign-ros2-control ros-humble-ros2-controllers
-mkdir -p ~/face_emote_ws/src
+sudo apt install ros-humble-turtlebot4-simulator ros-humble-ros-gz-sim \
+  ros-humble-ros-gz-bridge ros-humble-ign-ros2-control ros-humble-ros2-controllers
+```
+
+Clone branch bài 8 (các file package nằm ngay gốc repo):
+
+```bash
 git clone --single-branch --branch ttbot4_face_emote \
-  https://github.com/phuwcc/HRI_Prac_Exercise.git ~/face_emote_ws/src/ur_robot_drawing
-cd ~/face_emote_ws
-/usr/bin/python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-touch .venv/COLCON_IGNORE
-python -m pip install -r src/ur_robot_drawing/requirements.txt
-python -m colcon build --symlink-install --packages-select ttbot4_face_emote
-source install/setup.bash
-ros2 launch ttbot4_face_emote face_emote.launch.py
+  https://github.com/phuwcc/HRI_Prac_Exercise.git
+cd HRI_Prac_Exercise
+# Lần đầu: bổ sung thư viện Python vào hri, build và chạy:
+./run.sh --install-deps
+# Các lần sau:
+./run.sh
 ```
 
-Dùng Python hệ thống tương thích ROS, không dùng Python khác phiên bản để import `rclpy`. DeepFace tải trọng số vào cache ngoài repo trong lần đầu, cần Internet; vận tốc giữ 0 khi đang tải. `requirements.txt` giới hạn dòng API, không khóa toàn bộ dependency. DeepFace bản TensorFlow cũ có thể cần `tf-keras` tương thích phiên bản TensorFlow trong venv.
-
-Nếu clone đã có, chỉ cần `git pull` trên branch bài 8 rồi build lại. Các thư mục `config`, `launch`, `resource`, `test`, `ttbot4_face_emote`, `worlds` và file cấu hình package nằm ngay ở gốc repo trên branch này, không cần `git submodule update`.
-
-## Chạy bài
-
-Trong terminal mới: source ROS, kích hoạt cùng venv và source workspace. Lệnh mặc định mở cửa sổ Gazebo và cửa sổ webcam:
+Trong workspace gốc đang phát triển nhiều bài, chạy từ thư mục bài 8:
 
 ```bash
-ros2 launch ttbot4_face_emote face_emote.launch.py
-# Chọn webcam khác:
-ros2 launch ttbot4_face_emote face_emote.launch.py camera_index:=1
-# Không mở GUI Gazebo (vẫn mở cửa sổ webcam):
-ros2 launch ttbot4_face_emote face_emote.launch.py headless:=true
+cd /home/phuc/ur_robot_drawing/ttbot4_face_emote
+./run.sh
 ```
+
+Các tùy chọn:
+
+```bash
+./run.sh --help
+./run.sh --check                       # Chỉ kiểm tra hri + thư viện
+./run.sh --build-only                  # Build, chưa mở sim
+./run.sh camera_index:=1               # Chọn webcam khác
+./run.sh headless:=true                # Không mở GUI Gazebo, vẫn mở webcam
+./run.sh show_camera:=false            # Nhận diện nhưng không mở cửa sổ webcam
+./run.sh headless:=true recognition:=false  # Chỉ chạy sim để kiểm thử
+```
+
+Build/install/log được lưu trong `.run_ws/` cạnh script và bị Git bỏ qua. Script chỉ build package bài 8. `CONDA_SH` có thể chỉ tới `etc/profile.d/conda.sh` nếu Conda nằm ở vị trí khác; `CONDA_ENV_NAME` mặc định `hri`, `ROS_SETUP` mặc định `/opt/ros/humble/setup.bash`, `BAI8_WORKSPACE` đổi nơi lưu build.
+
+DeepFace 0.0.105 chạy bằng ONNX Runtime, không cần TensorFlow. `run.sh --install-deps` cài `requirements.txt` trước, rồi cài `requirements-models.txt` với `--no-deps` để dùng OpenCV contrib có GUI thay cho bản headless được khai báo bởi DeepFace/RetinaFace. Đây là thay thế có chủ đích: `pip check` có thể báo thiếu bản headless dù `cv2` có đầy đủ chức năng bài này. Không cài thêm OpenCV headless đè lên bản GUI. NumPy được giới hạn `<2` để giữ tương thích môi trường HRI đang có. Script đặt `PYTHONNOUSERSITE=1` để tránh thư viện ở `~/.local` lấn vào `hri`.
+
+Lần đầu model Emotion tải trọng số về cache ngoài repo, cần Internet. Robot đứng yên trong khi tải/khởi tạo. Không cần clone submodule.
+
+## Sử dụng
 
 Chờ robot xuất hiện trên sàn và controller được kích hoạt; giữ Neutral rồi thử từng biểu cảm trong bảng. Cửa sổ webcam hiển thị khung mặt, tên biểu cảm, điểm số và vận tốc. Điểm số mô hình không phải độ chính xác đã được hiệu chuẩn. Nhấn **Q/Esc** để dừng nhận diện (relay tự dừng robot); **Ctrl+C** ở terminal launch để đóng toàn bộ sim.
 
@@ -76,8 +88,7 @@ Hai controller `joint_state_broadcaster` và `diffdrive_controller` phải là `
 Chỉnh `config/emotions.yaml` trước khi build hoặc truyền file riêng:
 
 ```bash
-ros2 launch ttbot4_face_emote face_emote.launch.py \
-  params_file:=/absolute/path/emotions.yaml show_camera:=false
+./run.sh params_file:=/absolute/path/emotions.yaml show_camera:=false
 ```
 
 `linear_speed` dương, tối đa 0.2 m/s; `angular_speed` dương, tối đa 1 rad/s. `arc_duration` và `step_duration` giới hạn thời gian chuyển động. `stable_samples` đếm kết quả inference. `inference_period` là thời gian nghỉ giữa hai lần inference, không bảo đảm FPS. `timeout` dùng đồng hồ monotonic, không phụ thuộc `/clock`. Tham số đọc lúc khởi động; sửa cấu hình rồi khởi động lại. Topic bài này cố định `/cmd_vel` trong launch để khớp với relay mô phỏng.
@@ -87,24 +98,30 @@ ros2 launch ttbot4_face_emote face_emote.launch.py \
 Unit test và kiểm thử topic ROS 2 dùng camera/model giả lập, không cần tải model:
 
 ```bash
-cd ~/face_emote_ws/src/ur_robot_drawing
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hri
+source /opt/ros/humble/setup.bash
+export PYTHONNOUSERSITE=1
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
-# Thêm kiểm thử ROS 2 sau khi source ROS:
 FACE_EMOTE_ROS_TEST=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
 ```
 
 Kiểm tra chuyển động mô phỏng qua đủ sáu trạng thái mà không cần DeepFace/webcam:
 
 ```bash
-# Terminal 1: source ROS + workspace, cùng ROS_DOMAIN_ID
-ros2 launch ttbot4_face_emote face_emote.launch.py headless:=true recognition:=false
-# Terminal 2: source ROS + workspace, cùng ROS_DOMAIN_ID
-export ROS_LOCALHOST_ONLY=1
+# Terminal 1:
+./run.sh headless:=true recognition:=false
+# Terminal 2: trong thư mục chứa run.sh, cùng ROS_DOMAIN_ID
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate hri
+source /opt/ros/humble/setup.bash
+source .run_ws/install/setup.bash
+export PYTHONNOUSERSITE=1 ROS_LOCALHOST_ONLY=1
 python test/check_sim_motion.py
 ```
 
 Script bơm sáu biểu cảm vào chính `Controller` rồi gửi `/cmd_vel`, kiểm tra dấu vận tốc đo từ `/odom`, sau đó kiểm tra robot dừng khi mất heartbeat. Đây là kiểm thử đường điều khiển và physics, không đo độ chính xác nhận diện khuôn mặt hay xác minh góc quay đủ 360°. Chế độ `recognition:=false` chỉ phục vụ kiểm tra sim; mặc định nhận diện webcam bật.
 
-Đã kiểm tra trên máy phát triển: build package thành công; 22 unit/ROS test đạt; Gazebo Fortress headless tạo TurtleBot 4 Lite và kích hoạt hai controller; kiểm tra `/odom` đạt cho cả sáu hành động và watchdog. Nhận diện DeepFace/webcam và giao diện Gazebo chưa được kiểm tra trong lần xác minh này.
+Đã kiểm tra bằng Conda `hri`: `run.sh --check` và `run.sh --build-only` thành công; model Emotion ONNX thật đã tải/nạp và chạy dự đoán; 22 unit/ROS test đạt; Gazebo Fortress headless tạo TurtleBot 4 Lite và kích hoạt hai controller; kiểm tra `/odom` đạt cho cả sáu hành động và watchdog. Phần kiểm thử dùng dữ liệu khuôn mặt giả lập; chất lượng nhận diện với webcam người dùng và giao diện Gazebo cần được kiểm tra khi sử dụng.
 
 Tham khảo: [TurtleBot 4 Simulator (Humble)](https://github.com/turtlebot/turtlebot4_simulator/tree/humble), [DeepFace](https://github.com/serengil/deepface).

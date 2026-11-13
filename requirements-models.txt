@@ -1,0 +1,4 @@
+# Installed by run.sh using pip --no-deps after requirements.txt.
+# DeepFace and RetinaFace share the GUI OpenCV runtime already in hri.
+deepface==0.0.105
+retina-face==0.0.19

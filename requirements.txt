@@ -1,3 +1,9 @@
-# Model/runtime dependencies are resolved by DeepFace; install in a ROS-compatible venv.
-deepface>=0.0.93,<0.1
-opencv-python>=4.8,<5
+# GUI runtime for Conda hri. Install model packages separately with --no-deps
+# via run.sh; this substitutes GUI OpenCV for DeepFace's headless build.
+numpy>=1.26,<2
+opencv-contrib-python==4.11.0.86
+requests>=2.27.1
+gdown>=3.10.1
+tqdm>=4.30
+onnxruntime>=1.13,<2
+pandas>=2,<3
