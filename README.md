@@ -31,7 +31,7 @@ cd ~/face_emote_ws
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 touch .venv/COLCON_IGNORE
-python -m pip install -r src/ur_robot_drawing/ttbot4_face_emote/requirements.txt
+python -m pip install -r src/ur_robot_drawing/requirements.txt
 python -m colcon build --symlink-install --packages-select ttbot4_face_emote
 source install/setup.bash
 ros2 launch ttbot4_face_emote face_emote.launch.py
@@ -39,7 +39,7 @@ ros2 launch ttbot4_face_emote face_emote.launch.py
 
 Dùng Python hệ thống tương thích ROS, không dùng Python khác phiên bản để import `rclpy`. DeepFace tải trọng số vào cache ngoài repo trong lần đầu, cần Internet; vận tốc giữ 0 khi đang tải. `requirements.txt` giới hạn dòng API, không khóa toàn bộ dependency. DeepFace bản TensorFlow cũ có thể cần `tf-keras` tương thích phiên bản TensorFlow trong venv.
 
-Nếu clone đã có, chỉ cần `git pull` trên branch bài 8 rồi build lại. Repo chỉ chứa thư mục `ttbot4_face_emote`, không cần `git submodule update`.
+Nếu clone đã có, chỉ cần `git pull` trên branch bài 8 rồi build lại. Các thư mục `config`, `launch`, `resource`, `test`, `ttbot4_face_emote`, `worlds` và file cấu hình package nằm ngay ở gốc repo trên branch này, không cần `git submodule update`.
 
 ## Chạy bài
 
@@ -87,7 +87,7 @@ ros2 launch ttbot4_face_emote face_emote.launch.py \
 Unit test và kiểm thử topic ROS 2 dùng camera/model giả lập, không cần tải model:
 
 ```bash
-cd ~/face_emote_ws/src/ur_robot_drawing/ttbot4_face_emote
+cd ~/face_emote_ws/src/ur_robot_drawing
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
 # Thêm kiểm thử ROS 2 sau khi source ROS:
 FACE_EMOTE_ROS_TEST=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q
