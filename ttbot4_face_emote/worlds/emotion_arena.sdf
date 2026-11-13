@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+  <world name="emotion_arena">
+    <physics name="physics" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="ignition-gazebo-physics-system" name="ignition::gazebo::systems::Physics"/>
+    <plugin filename="ignition-gazebo-user-commands-system" name="ignition::gazebo::systems::UserCommands"/>
+    <plugin filename="ignition-gazebo-scene-broadcaster-system" name="ignition::gazebo::systems::SceneBroadcaster"/>
+    <plugin filename="ignition-gazebo-contact-system" name="ignition::gazebo::systems::Contact"/>
+    <scene><ambient>0.7 0.7 0.7 1</ambient><background>0.8 0.85 0.9 1</background></scene>
+    <light name="sun" type="directional">
+      <pose>0 0 10 0 0 0</pose><direction>-0.5 0.1 -1</direction>
+      <diffuse>0.8 0.8 0.8 1</diffuse><cast_shadows>false</cast_shadows>
+    </light>
+    <model name="floor">
+      <static>true</static>
+      <link name="floor_link">
+        <collision name="collision"><geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry></collision>
+        <visual name="visual"><geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+          <material><ambient>0.55 0.6 0.65 1</ambient><diffuse>0.55 0.6 0.65 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="origin_marker">
+      <static>true</static><pose>0 0 0.001 0 0 0</pose>
+      <link name="marker"><visual name="marker"><geometry><cylinder><radius>0.5</radius><length>0.001</length></cylinder></geometry>
+        <material><ambient>0.2 0.7 0.3 1</ambient><diffuse>0.2 0.7 0.3 1</diffuse></material>
+      </visual></link>
+    </model>
+  </world>
+</sdf>
