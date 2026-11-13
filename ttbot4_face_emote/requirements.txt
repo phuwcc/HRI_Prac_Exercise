@@ -1,0 +1,3 @@
+# Model/runtime dependencies are resolved by DeepFace; install in a ROS-compatible venv.
+deepface>=0.0.93,<0.1
+opencv-python>=4.8,<5

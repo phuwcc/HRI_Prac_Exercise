@@ -1,0 +1,19 @@
+BÀI THỰC HÀNH: NHẬN DIỆN BIỂU CẢM KHUÔN MẶT VÀ ĐIỀU KHIỂN TURTLEBOT
+Yêu cầu: Xây dựng chương trình nhận diện biểu cảm khuôn mặt qua webcam và điều khiển TurtleBot di chuyển theo các quỹ đạo đơn giản tương ứng với từng biểu cảm.
+
+Gợi ý thực hiện:
+
+Sử dụng thư viện DeepFace (pip install deepface) hoặc FER (pip install fer) kết hợp OpenCV để nhận diện biểu cảm khuôn mặt.
+
+Nhận diện 6 trạng thái và thực hiện các hành động tương ứng:
+
+Biểu cảm	Hành động của TurtleBot
+Happy (Vui vẻ)	Di chuyển theo quỹ đạo cong sang trái
+Sad (Buồn)	Di chuyển theo quỹ đạo cong sang phải
+Neutral (Bình thường)	Dừng tại chỗ
+Angry (Tức giận)	Lùi nhẹ về phía sau
+Surprise (Ngạc nhiên)	Xoay một vòng tại chỗ
+Fear (Sợ hãi)	Tiến nhẹ về phía trước
+Điều khiển TurtleBot thông qua ROS 2 và topic /cmd_vel.
+
+Hiển thị hình ảnh camera và kết quả nhận diện theo thời gian thực.
